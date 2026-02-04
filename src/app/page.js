@@ -146,68 +146,65 @@ export default function ReturnPortal() {
     }
   };
 
-  // --- RENDER: LOGIN SCREEN (MATCHING SCREENSHOT) ---
+  // --- RENDER: LOGIN SCREEN ---
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#FFFCF5] flex items-center justify-center relative overflow-hidden p-4">
+      <div className="min-h-screen bg-[#F9F6F2] flex items-center justify-center relative overflow-hidden p-4">
         {/* MANDALA DECORATIONS */}
-        {/* Make sure 'mandala.png' is in your /public folder */}
-        <img src="/mandala.png" alt="" className="absolute -top-10 -left-10 w-48 md:w-80 opacity-80 pointer-events-none" />
-        <img src="/mandala.png" alt="" className="absolute -bottom-10 -right-10 w-48 md:w-80 opacity-80 pointer-events-none rotate-180" />
+        <img src="/mandala.png" alt="" className="absolute -top-12 -left-12 w-40 md:w-64 opacity-60 pointer-events-none" />
+        <img src="/mandala.png" alt="" className="absolute -bottom-12 -right-12 w-40 md:w-64 opacity-60 pointer-events-none rotate-180" />
 
-        <div className="bg-white p-8 md:p-12 rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.04)] w-full max-w-lg z-10 border border-gray-50">
-          <div className="text-center mb-10">
-            <h1 className="font-serif text-3xl md:text-4xl text-[#4a4a4a] tracking-widest uppercase mb-4">
-              Track Your Journey
+        <div className="bg-white p-6 md:p-10 rounded shadow-sm w-full max-w-sm z-10 border border-[#e5e0d8]">
+          <div className="text-center mb-6">
+            <h1 className="font-serif text-2xl text-[#3a3a3a] tracking-widest uppercase mb-2">
+              Satmi Returns
             </h1>
-            <p className="text-gray-500 text-sm">Enter your phone number to access your orders.</p>
+            <p className="text-gray-500 text-xs uppercase tracking-wide">Enter phone number to login</p>
           </div>
           
           <div id="recaptcha-container"></div>
           
           {!confirmationResult ? (
-            <div className="space-y-6">
+            <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
                 <input 
                   type="text" 
                   value={phoneNumber} 
                   onChange={(e) => setPhoneNumber(e.target.value)} 
-                  className="w-full border border-gray-200 px-4 py-3 rounded text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#722828] focus:border-[#722828] transition-colors"
+                  className="w-full border border-gray-300 px-4 py-3 rounded text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#7A1E1E] focus:border-[#7A1E1E] transition-colors text-sm"
                   placeholder="+919999999999"
-                  style={{ color: 'black' }} // Force black text
+                  style={{ color: 'black' }} 
                 />
               </div>
               <button 
                 onClick={sendOtp} 
-                className="w-full bg-[#722828] text-white py-3.5 rounded font-bold tracking-wider hover:bg-[#5a1e1e] transition-colors shadow-sm text-sm uppercase"
+                className="w-full bg-[#7A1E1E] text-white py-3 rounded font-bold tracking-wider hover:bg-[#5e1717] transition-colors shadow-sm text-xs uppercase"
               >
                 Send OTP
               </button>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">One-Time Password</label>
                 <input 
                   type="text" 
                   value={otp} 
                   onChange={(e) => setOtp(e.target.value)} 
-                  className="w-full border border-gray-200 px-4 py-3 rounded text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#722828] focus:border-[#722828] text-center tracking-widest text-lg"
+                  className="w-full border border-gray-300 px-4 py-3 rounded text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#7A1E1E] focus:border-[#7A1E1E] text-center tracking-widest text-lg"
                   placeholder="• • • • • •"
                   style={{ color: 'black' }} 
                 />
               </div>
               <button 
                 onClick={verifyOtp} 
-                className="w-full bg-[#722828] text-white py-3.5 rounded font-bold tracking-wider hover:bg-[#5a1e1e] transition-colors shadow-sm text-sm uppercase"
+                className="w-full bg-[#7A1E1E] text-white py-3 rounded font-bold tracking-wider hover:bg-[#5e1717] transition-colors shadow-sm text-xs uppercase"
               >
                 Verify & Login
               </button>
             </div>
           )}
           {error && (
-            <div className="mt-6 text-red-600 text-sm text-center bg-red-50 p-2 rounded">
+            <div className="mt-4 text-red-600 text-xs text-center bg-red-50 p-2 rounded">
               {error}
             </div>
           )}
@@ -218,57 +215,56 @@ export default function ReturnPortal() {
 
   // --- RENDER: MAIN DASHBOARD ---
   return (
-    <div className="min-h-screen bg-[#FFFCF5] p-6 md:p-12 pb-32 relative">
-       {/* Background Mandalas for Dashboard too */}
-       <img src="/mandala.png" alt="" className="absolute top-0 left-0 w-40 opacity-40 pointer-events-none fixed" />
+    <div className="min-h-screen bg-[#F9F6F2] p-4 md:p-8 pb-24 relative overflow-x-hidden">
+       {/* Dashboard Background Mandala */}
+       <img src="/mandala.png" alt="" className="fixed top-0 left-0 w-32 opacity-30 pointer-events-none" />
        
-      <div className="max-w-4xl mx-auto relative z-10">
-        <div className="flex justify-between items-end mb-10 border-b border-[#e5e0d8] pb-4">
+      <div className="max-w-3xl mx-auto relative z-10">
+        <div className="flex justify-between items-end mb-6 border-b border-[#e5e0d8] pb-3">
           <div>
-            <h1 className="font-serif text-3xl font-normal text-[#3a3a3a] tracking-wide uppercase">Your Orders</h1>
-            <p className="text-gray-500 mt-1 text-sm">Select items you wish to return.</p>
+            <h1 className="font-serif text-2xl font-normal text-[#3a3a3a] tracking-wide uppercase">Your Orders</h1>
           </div>
           <button 
             onClick={() => window.location.reload()} 
-            className="text-sm font-medium text-[#722828] hover:underline uppercase tracking-wide"
+            className="text-xs font-bold text-[#7A1E1E] hover:underline uppercase tracking-wide"
           >
             Logout
           </button>
         </div>
 
         {loading && (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#722828]"></div>
+          <div className="flex justify-center py-10">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#7A1E1E]"></div>
           </div>
         )}
         
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4 text-sm">
             {error}
           </div>
         )}
         
         {/* ORDERS LIST */}
-        <div className="space-y-6">
+        <div className="space-y-4">
           {orders.map((order) => {
             const status = order.delivery_status || { is_returnable: false, message: "Status Unknown" };
             const isEligible = status.is_returnable;
 
             return (
-              <div key={order.id} className={`bg-white rounded shadow-sm border ${isEligible ? 'border-gray-100' : 'border-red-50 bg-red-50/10'}`}>
+              <div key={order.id} className={`bg-white rounded shadow-sm border ${isEligible ? 'border-gray-100' : 'border-red-50 bg-red-50/20'}`}>
                 
                 {/* Header */}
-                <div className={`px-6 py-4 border-b flex justify-between items-center ${isEligible ? 'bg-gray-50/50' : 'bg-red-50/30'}`}>
+                <div className={`px-4 py-3 border-b flex justify-between items-center ${isEligible ? 'bg-gray-50/40' : 'bg-red-50/40'}`}>
                   <div>
-                    <h3 className="font-bold text-lg text-gray-800 font-serif tracking-wide">{order.name}</h3>
-                    <p className={`text-xs font-bold mt-1 uppercase tracking-wider ${isEligible ? "text-green-700" : "text-red-700"}`}>
+                    <h3 className="font-bold text-base text-gray-800 font-serif tracking-wide">{order.name}</h3>
+                    <p className={`text-[10px] font-bold mt-0.5 uppercase tracking-wider ${isEligible ? "text-green-700" : "text-red-700"}`}>
                       {status.message} 
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm text-gray-900 font-medium">{new Date(order.created_at).toLocaleDateString()}</p>
+                    <p className="text-xs text-gray-900 font-medium">{new Date(order.created_at).toLocaleDateString()}</p>
                     {status.delivered_date && (
-                       <p className="text-xs text-gray-500">Delivered: {new Date(status.delivered_date).toLocaleDateString()}</p>
+                       <p className="text-[10px] text-gray-500">Delivered: {new Date(status.delivered_date).toLocaleDateString()}</p>
                     )}
                   </div>
                 </div>
@@ -280,28 +276,30 @@ export default function ReturnPortal() {
                     const isSelected = selectedItems.find(i => i.uniqueId === uniqueId);
                     
                     return (
-                      <div key={item.id} className="p-6 flex flex-col md:flex-row justify-between items-center hover:bg-[#faf9f6] transition-colors">
-                        <div className="flex-1 mb-2 md:mb-0">
-                          <p className="font-medium text-gray-900 text-lg">{item.name}</p>
-                          <p className="text-sm text-gray-500">Qty: {item.quantity}</p>
+                      <div key={item.id} className="p-4 flex flex-col md:flex-row justify-between items-center hover:bg-[#faf9f6] transition-colors">
+                        <div className="flex-1 mb-2 md:mb-0 w-full">
+                          <p className="font-medium text-gray-900 text-sm md:text-base">{item.name}</p>
+                          <p className="text-xs text-gray-500 mt-1">Qty: {item.quantity}</p>
                         </div>
                         
                         {/* CHECKBOX LOGIC */}
+                        <div className="w-full md:w-auto flex justify-end">
                         {isEligible ? (
-                          <label className="flex items-center space-x-3 cursor-pointer select-none">
-                            <span className="text-sm font-medium text-gray-600 uppercase tracking-wide">Return</span>
+                          <label className="flex items-center space-x-2 cursor-pointer select-none bg-gray-50 px-3 py-1.5 rounded border border-gray-200 hover:border-[#7A1E1E] transition-colors">
+                            <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">Return</span>
                             <input 
                               type="checkbox"
                               checked={!!isSelected}
                               onChange={() => handleCheckboxChange(order, item)}
-                              className="w-5 h-5 rounded border-gray-300 text-[#722828] focus:ring-[#722828] accent-[#722828]"
+                              className="w-4 h-4 rounded border-gray-300 text-[#7A1E1E] focus:ring-[#7A1E1E] accent-[#7A1E1E]"
                             />
                           </label>
                         ) : (
-                          <span className="px-3 py-1 bg-gray-100 text-gray-400 text-xs font-bold rounded uppercase tracking-wider">
+                          <span className="px-2 py-1 bg-gray-100 text-gray-400 text-[10px] font-bold rounded uppercase tracking-wider">
                             Not Eligible
                           </span>
                         )}
+                        </div>
                       </div>
                     );
                   })}
@@ -314,14 +312,14 @@ export default function ReturnPortal() {
 
       {/* FLOATING ACTION BAR */}
       {selectedItems.length > 0 && (
-        <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 p-4 shadow-[0_-5px_20px_rgba(0,0,0,0.05)] flex justify-between items-center px-6 md:px-12 z-40">
+        <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 p-3 md:p-4 shadow-[0_-5px_20px_rgba(0,0,0,0.05)] flex justify-between items-center px-4 md:px-12 z-40">
           <div>
-            <p className="font-serif font-bold text-xl text-[#722828]">{selectedItems.length} Items Selected</p>
-            <p className="text-xs text-gray-500 uppercase tracking-wider">Ready to process</p>
+            <p className="font-serif font-bold text-lg text-[#7A1E1E]">{selectedItems.length} Items</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider hidden md:block">Ready to process</p>
           </div>
           <button 
             onClick={() => setIsModalOpen(true)}
-            className="bg-[#722828] text-white px-8 py-3 rounded font-bold hover:bg-[#5a1e1e] transition-all shadow-lg uppercase tracking-wider text-sm"
+            className="bg-[#7A1E1E] text-white px-6 py-2.5 rounded font-bold hover:bg-[#5e1717] transition-all shadow-lg uppercase tracking-wider text-xs md:text-sm"
           >
             Proceed
           </button>
@@ -331,28 +329,28 @@ export default function ReturnPortal() {
       {/* BULK RETURN MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-[#3a3a3a]/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 transition-opacity">
-          <div className="bg-white rounded shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto flex flex-col border border-gray-100">
+          <div className="bg-white rounded shadow-2xl w-full max-w-md max-h-[85vh] overflow-y-auto flex flex-col border border-gray-100">
             
-            <div className="p-6 border-b border-gray-100 bg-[#FFFCF5]">
-              <h2 className="text-xl font-serif font-bold text-[#3a3a3a] uppercase tracking-wide">Confirm Return</h2>
-              <p className="text-sm text-gray-500 mt-1">You are returning {selectedItems.length} items</p>
+            <div className="p-5 border-b border-gray-100 bg-[#F9F6F2]">
+              <h2 className="text-lg font-serif font-bold text-[#3a3a3a] uppercase tracking-wide">Confirm Return</h2>
+              <p className="text-xs text-gray-500 mt-1">Returning {selectedItems.length} items</p>
             </div>
             
-            <div className="p-6 space-y-5">
+            <div className="p-5 space-y-4">
               {/* Selected Items List */}
-              <div className="bg-gray-50 p-4 rounded border border-gray-200 max-h-32 overflow-y-auto">
+              <div className="bg-gray-50 p-3 rounded border border-gray-200 max-h-24 overflow-y-auto">
                 {selectedItems.map(i => (
-                  <div key={i.uniqueId} className="text-sm font-medium text-gray-800 py-1 border-b border-gray-100 last:border-0">
-                    • {i.title} <span className="text-gray-400 text-xs">({i.orderId})</span>
+                  <div key={i.uniqueId} className="text-xs font-medium text-gray-800 py-1 border-b border-gray-100 last:border-0 truncate">
+                    • {i.title}
                   </div>
                 ))}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 uppercase tracking-wide">Reason</label>
+                <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase tracking-wide">Reason</label>
                 <div className="relative">
                   <select 
-                    className="w-full border border-gray-300 px-4 py-3 rounded text-gray-900 bg-white focus:ring-1 focus:ring-[#722828] focus:border-[#722828] outline-none appearance-none"
+                    className="w-full border border-gray-300 px-3 py-2.5 rounded text-gray-900 bg-white focus:ring-1 focus:ring-[#7A1E1E] focus:border-[#7A1E1E] outline-none text-sm"
                     value={commonReason}
                     onChange={(e) => setCommonReason(e.target.value)}
                     style={{ color: 'black' }}
@@ -366,9 +364,9 @@ export default function ReturnPortal() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 uppercase tracking-wide">Comments</label>
+                <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase tracking-wide">Comments</label>
                 <textarea 
-                  className="w-full border border-gray-300 px-4 py-3 rounded text-gray-900 placeholder-gray-400 focus:ring-1 focus:ring-[#722828] focus:border-[#722828] outline-none min-h-[80px]"
+                  className="w-full border border-gray-300 px-3 py-2.5 rounded text-gray-900 placeholder-gray-400 focus:ring-1 focus:ring-[#7A1E1E] focus:border-[#7A1E1E] outline-none min-h-[60px] text-sm"
                   value={comments}
                   onChange={(e) => setComments(e.target.value)}
                   placeholder="Details regarding all items..."
@@ -377,24 +375,24 @@ export default function ReturnPortal() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 uppercase tracking-wide">
-                  Unboxing Video <span className="text-red-500 text-xs normal-case ml-1">(Required)</span>
+                <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase tracking-wide">
+                  Unboxing Video <span className="text-red-500 normal-case">(Required)</span>
                 </label>
-                <div className="border-2 border-dashed border-gray-300 rounded p-6 text-center hover:bg-gray-50 transition-colors cursor-pointer group">
+                <div className="border-2 border-dashed border-gray-300 rounded p-4 text-center hover:bg-gray-50 transition-colors cursor-pointer">
                   <input 
                     type="file" 
                     accept="video/*"
                     onChange={(e) => setVideoFile(e.target.files[0])}
-                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-[#722828]/10 file:text-[#722828] hover:file:bg-[#722828]/20 cursor-pointer"
+                    className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-[#7A1E1E]/10 file:text-[#7A1E1E] hover:file:bg-[#7A1E1E]/20 cursor-pointer"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="p-6 border-t border-gray-100 bg-[#FFFCF5] rounded-b flex gap-3">
+            <div className="p-4 border-t border-gray-100 bg-[#F9F6F2] rounded-b flex gap-3">
               <button 
                 onClick={() => setIsModalOpen(false)}
-                className="flex-1 px-4 py-3 bg-white border border-gray-300 text-gray-700 font-bold rounded hover:bg-gray-50 uppercase tracking-wide text-sm"
+                className="flex-1 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 font-bold rounded hover:bg-gray-50 uppercase tracking-wide text-xs"
                 disabled={uploading}
               >
                 Cancel
@@ -402,9 +400,9 @@ export default function ReturnPortal() {
               <button 
                 onClick={handleBulkSubmit}
                 disabled={uploading}
-                className="flex-1 px-4 py-3 bg-[#722828] text-white font-bold rounded hover:bg-[#5a1e1e] disabled:bg-gray-400 flex justify-center items-center uppercase tracking-wide text-sm"
+                className="flex-1 px-4 py-2.5 bg-[#7A1E1E] text-white font-bold rounded hover:bg-[#5e1717] disabled:bg-gray-400 flex justify-center items-center uppercase tracking-wide text-xs"
               >
-                {uploading ? "Uploading..." : "Submit All"}
+                {uploading ? "Uploading..." : "Submit"}
               </button>
             </div>
           </div>
