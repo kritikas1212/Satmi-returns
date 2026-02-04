@@ -158,7 +158,7 @@ export default function ReturnPortal() {
             w-[85vw] on mobile (85% of screen width)
             md:w-[55vw] on desktop (55% of screen width)
         */}
-        <div className="bg-white p-8 md:p-14 rounded shadow-sm z-10 border border-[#e5e0d8] w-[85vw] md:w-[55vw]">
+        <div className="bg-white p-8 md:p-14 rounded shadow-sm z-10 border border-[#e5e0d8] w-[85vw] md:w-[50vw]">
           <div className="text-center mb-8">
             <h1 className="font-serif text-2xl md:text-3xl text-[#3a3a3a] tracking-widest uppercase mb-3">
               Satmi Returns
