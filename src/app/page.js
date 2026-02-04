@@ -154,57 +154,61 @@ export default function ReturnPortal() {
         <img src="/mandala.png" alt="" className="absolute -top-12 -left-12 w-40 md:w-64 opacity-60 pointer-events-none" />
         <img src="/mandala.png" alt="" className="absolute -bottom-12 -right-12 w-40 md:w-64 opacity-60 pointer-events-none rotate-180" />
 
-        <div className="bg-white p-6 md:p-10 rounded shadow-sm w-full max-w-sm z-10 border border-[#e5e0d8]">
-          <div className="text-center mb-6">
-            <h1 className="font-serif text-2xl text-[#3a3a3a] tracking-widest uppercase mb-2">
+        {/* UPDATED CARD WIDTH:
+            w-[85vw] on mobile (85% of screen width)
+            md:w-[55vw] on desktop (55% of screen width)
+        */}
+        <div className="bg-white p-8 md:p-14 rounded shadow-sm z-10 border border-[#e5e0d8] w-[85vw] md:w-[55vw]">
+          <div className="text-center mb-8">
+            <h1 className="font-serif text-2xl md:text-3xl text-[#3a3a3a] tracking-widest uppercase mb-3">
               Satmi Returns
             </h1>
-            <p className="text-gray-500 text-xs uppercase tracking-wide">Enter phone number to login</p>
+            <p className="text-gray-500 text-xs md:text-sm uppercase tracking-wide">Enter phone number to login</p>
           </div>
           
           <div id="recaptcha-container"></div>
           
           {!confirmationResult ? (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div>
                 <input 
                   type="text" 
                   value={phoneNumber} 
                   onChange={(e) => setPhoneNumber(e.target.value)} 
-                  className="w-full border border-gray-300 px-4 py-3 rounded text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#7A1E1E] focus:border-[#7A1E1E] transition-colors text-sm"
+                  className="w-full border border-gray-300 px-4 py-4 rounded text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#7A1E1E] focus:border-[#7A1E1E] transition-colors text-base"
                   placeholder="+919999999999"
                   style={{ color: 'black' }} 
                 />
               </div>
               <button 
                 onClick={sendOtp} 
-                className="w-full bg-[#7A1E1E] text-white py-3 rounded font-bold tracking-wider hover:bg-[#5e1717] transition-colors shadow-sm text-xs uppercase"
+                className="w-full bg-[#7A1E1E] text-white py-4 rounded font-bold tracking-wider hover:bg-[#5e1717] transition-colors shadow-sm text-sm uppercase"
               >
                 Send OTP
               </button>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div>
                 <input 
                   type="text" 
                   value={otp} 
                   onChange={(e) => setOtp(e.target.value)} 
-                  className="w-full border border-gray-300 px-4 py-3 rounded text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#7A1E1E] focus:border-[#7A1E1E] text-center tracking-widest text-lg"
+                  className="w-full border border-gray-300 px-4 py-4 rounded text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#7A1E1E] focus:border-[#7A1E1E] text-center tracking-widest text-xl"
                   placeholder="• • • • • •"
                   style={{ color: 'black' }} 
                 />
               </div>
               <button 
                 onClick={verifyOtp} 
-                className="w-full bg-[#7A1E1E] text-white py-3 rounded font-bold tracking-wider hover:bg-[#5e1717] transition-colors shadow-sm text-xs uppercase"
+                className="w-full bg-[#7A1E1E] text-white py-4 rounded font-bold tracking-wider hover:bg-[#5e1717] transition-colors shadow-sm text-sm uppercase"
               >
                 Verify & Login
               </button>
             </div>
           )}
           {error && (
-            <div className="mt-4 text-red-600 text-xs text-center bg-red-50 p-2 rounded">
+            <div className="mt-6 text-red-600 text-xs text-center bg-red-50 p-2 rounded">
               {error}
             </div>
           )}
@@ -219,7 +223,7 @@ export default function ReturnPortal() {
        {/* Dashboard Background Mandala */}
        <img src="/mandala.png" alt="" className="fixed top-0 left-0 w-32 opacity-30 pointer-events-none" />
        
-      <div className="max-w-3xl mx-auto relative z-10">
+      <div className="max-w-4xl mx-auto relative z-10">
         <div className="flex justify-between items-end mb-6 border-b border-[#e5e0d8] pb-3">
           <div>
             <h1 className="font-serif text-2xl font-normal text-[#3a3a3a] tracking-wide uppercase">Your Orders</h1>
