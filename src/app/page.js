@@ -150,14 +150,23 @@ export default function ReturnPortal() {
   if (!user) {
     return (
       <div className="min-h-screen bg-[#F9F6F2] flex items-center justify-center relative overflow-hidden p-4">
-        {/* MANDALA DECORATIONS */}
-        <img src="/mandala.png" alt="" className="absolute -top-12 -left-12 w-40 md:w-64 opacity-60 pointer-events-none" />
-        <img src="/mandala.png" alt="" className="absolute -bottom-12 -right-12 w-40 md:w-64 opacity-60 pointer-events-none rotate-180" />
+        
+        {/* --- MANDALA TOP LEFT --- */}
+        <img 
+          src="/mandala.png" 
+          alt="" 
+          className="absolute top-0 left-0 opacity-80 pointer-events-none z-0 w-[35vw] md:w-[21vw]" 
+          style={{ transform: 'translate(-20%, -20%) rotate(-15deg)' }}
+        />
 
-        {/* UPDATED CARD WIDTH:
-            w-[85vw] on mobile (85% of screen width)
-            md:w-[55vw] on desktop (55% of screen width)
-        */}
+        {/* --- MANDALA BOTTOM RIGHT --- */}
+        <img 
+          src="/mandala.png" 
+          alt="" 
+          className="absolute bottom-0 right-0 opacity-80 pointer-events-none z-0 w-[35vw] md:w-[21vw]" 
+          style={{ transform: 'translate(20%, 20%) rotate(165deg)' }}
+        />
+
         <div className="bg-white p-8 md:p-14 rounded shadow-sm z-10 border border-[#e5e0d8] w-[85vw] md:w-[50vw]">
           <div className="text-center mb-8">
             <h1 className="font-serif text-2xl md:text-3xl text-[#3a3a3a] tracking-widest uppercase mb-3">
@@ -220,8 +229,22 @@ export default function ReturnPortal() {
   // --- RENDER: MAIN DASHBOARD ---
   return (
     <div className="min-h-screen bg-[#F9F6F2] p-4 md:p-8 pb-24 relative overflow-x-hidden">
-       {/* Dashboard Background Mandala */}
-       <img src="/mandala.png" alt="" className="fixed top-0 left-0 w-32 opacity-30 pointer-events-none" />
+       
+      {/* --- MANDALA TOP LEFT --- */}
+      <img 
+        src="/mandala.png" 
+        alt="" 
+        className="absolute top-0 left-0 opacity-80 pointer-events-none z-0 w-[35vw] md:w-[21vw]" 
+        style={{ transform: 'translate(-20%, -20%) rotate(-15deg)' }}
+      />
+
+      {/* --- MANDALA BOTTOM RIGHT --- */}
+      <img 
+        src="/mandala.png" 
+        alt="" 
+        className="absolute bottom-0 right-0 opacity-80 pointer-events-none z-0 w-[35vw] md:w-[21vw]" 
+        style={{ transform: 'translate(20%, 20%) rotate(165deg)' }}
+      />
        
       <div className="max-w-4xl mx-auto relative z-10">
         <div className="flex justify-between items-end mb-6 border-b border-[#e5e0d8] pb-3">
