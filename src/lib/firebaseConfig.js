@@ -1,21 +1,28 @@
 // src/lib/firebaseConfig.js
-import { initializeApp, getApps } from "firebase/app";
+// Firebase client config — uses NEXT_PUBLIC_* env vars so phone OTP auth works correctly.
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getStorage } from "firebase/storage"; // <--- 1. Added this import
+import { getStorage } from "firebase/storage";
+import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDnMQX9UgtD3tqZLVk1j6h9giF9zaWMrSw",
-  authDomain: "satmi-485912.firebaseapp.com",
-  projectId: "satmi-485912",
-  storageBucket: "satmi-485912.firebasestorage.app", // <--- This bucket handles your videos
-  messagingSenderId: "613527699749",
-  appId: "1:613527699749:web:aee23b360593c388a5dacc",
-  measurementId: "G-N15S5BH69L"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase (Singleton Pattern)
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+// Validate required client credentials (avoid invalid-app-credential)
+const required = ["apiKey", "authDomain", "projectId", "appId"];
+const missing = required.filter((key) => !firebaseConfig[key]);
+if (typeof window !== "undefined" && missing.length > 0) {
+  console.warn("[Firebase] Missing env:", missing.join(", "), "— set NEXT_PUBLIC_FIREBASE_* in .env.local");
+}
 
-// Export Auth & Storage
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+
 export const auth = getAuth(app);
-export const storage = getStorage(app); // <--- 2. Added this export
+export const storage = getStorage(app);
+export const db = getFirestore(app);
