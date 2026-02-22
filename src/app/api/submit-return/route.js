@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createReturnOrder, generateLabel } from '@/lib/shiprocketServer';
-import { Resend } from 'resend';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebaseConfig';
 
 const FROM_EMAIL = "Satmi Support <support@satmi.in>";
 
@@ -19,114 +19,45 @@ export async function POST(request) {
       originalCourier
     } = body;
 
-    // 1. Create RTO directly (server-side; no fetch to self)
-    const createData = await createReturnOrder({
-      orderId,
-      customerName,
-      email,
-      phone,
-      originalCourier,
-      testMode: false,
-    });
-
-    if (!createData.success) {
-      return NextResponse.json(
-        { success: false, error: createData.error || "Shiprocket create failed" },
-        { status: 400 }
-      );
-    }
-
-    const { shipmentId, awb, courier } = createData;
-
-    // 2. Generate label
-    let labelUrl = null;
-    if (shipmentId != null) {
-      const labelResult = await generateLabel(shipmentId);
-      if (labelResult.success && labelResult.labelUrl) {
-        labelUrl = labelResult.labelUrl;
-      } else if (labelResult.raw?.label_url) {
-        labelUrl = labelResult.raw.label_url;
-      }
-    }
-
-    // 3. Send confirmation email to customer
-    if (email && process.env.RESEND_API_KEY) {
-      const customerNameStr = customerName || "Customer";
-      const html = `
-        <p>Hi ${customerNameStr},</p>
-        <p>Your return request for order <strong>${orderId}</strong> has been automatically approved and processed.</p>
-        <p><strong>Courier:</strong> ${courier || "—"}</p>
-        <p><strong>AWB:</strong> ${awb || "—"}</p>
-        ${labelUrl ? `<p><a href="${labelUrl}" style="display:inline-block;background:#7A1E1E;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">Download return shipping label</a></p>` : ""}
-        ${labelUrl ? `<p>Or copy this link: <a href="${labelUrl}">${labelUrl}</a></p>` : ""}
-        <p>Please pack the item securely and hand it over to the courier. Our team will process the return once received at our warehouse.</p>
-        <p>— Satmi Support</p>
-      `;
-      try {
-        const resend = new Resend(process.env.RESEND_API_KEY);
-        await resend.emails.send({
-          from: FROM_EMAIL,
-          to: [email],
-          subject: `Return label for order ${orderId} – Satmi`,
-          html,
-        });
-      } catch (emailErr) {
-        console.error("Return label email failed:", emailErr);
-      }
-    }
-
-    // 4. Save to Google Sheets for record keeping
-    const { google } = await import('googleapis');
+    // Save to Firestore for manual review
     try {
-      const auth = new google.auth.GoogleAuth({
-        credentials: {
-          client_email: process.env.GOOGLE_CLIENT_EMAIL,
-          private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-        },
-        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-      });
-
-      const sheets = google.sheets({ version: 'v4', auth });
-
-      const rowData = [
-        new Date().toLocaleString('en-IN'), // A: Timestamp
-        email,                        // B: Email address
-        orderId,                      // C: Order Number
-        itemTitle,                    // D: Product Name
-        phone,                        // E: Phone Number
-        customerName,                 // F: Full Name
-        email,                        // G: Email Address (Duplicate as per your sheet)
-        reason,                       // H: Reason For Return
-        comments || "No comments",    // I: Comments
-        videoUrl,                     // J: Unboxing Video Link
-        "Auto-Approved",             // K: Status (Auto-approved)
-        shipmentId || "",             // L: Shiprocket ID
-        labelUrl || "",               // M: Label Link
-        `Courier: ${courier}, AWB: ${awb}` // N: Automation Log
-      ];
-
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: 'Sheet1!A:N', // Target columns A to N
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values: [rowData] },
-      });
-    } catch (sheetErr) {
-      console.error("Google Sheets logging failed:", sheetErr);
-      // Don't fail the request if sheet logging fails
+      const returnDoc = {
+        orderId,
+        customerName,
+        email,
+        itemTitle,
+        phone,
+        reason,
+        comments: comments || "No comments",
+        videoUrl,
+        originalCourier,
+        status: "Pending",
+        createdAt: serverTimestamp(),
+        warehouseAddress: {
+          shipping_customer_name: "Satmi Warehouse",
+          shipping_address: "Plot No 519, Roja Yaqubpur, Sec 16B",
+          shipping_address_2: "Greater Noida",
+          shipping_city: "Greater Noida",
+          shipping_state: "Uttar Pradesh",
+          shipping_country: "India",
+          shipping_pincode: "201318",
+          shipping_phone: "9999999999"
+        }
+      };
+      
+      await setDoc(doc(db, "returns", `${orderId}_${Date.now()}`), returnDoc);
+    } catch (firestoreErr) {
+      console.error("Firestore logging failed:", firestoreErr);
+      return NextResponse.json({ error: "Failed to save return request" }, { status: 500 });
     }
 
     return NextResponse.json({
       success: true,
-      awb: awb || "PENDING",
-      shipmentId: shipmentId ?? null,
-      labelUrl,
-      courier: courier || "Unknown",
-      message: "Return order created and label sent successfully"
+      message: "Return request submitted successfully. We will review and email you shortly."
     });
 
   } catch (error) {
-    console.error('Sheet Error:', error);
+    console.error('Submit return error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

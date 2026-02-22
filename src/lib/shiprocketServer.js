@@ -94,22 +94,17 @@ async function getShopifyOrderAddress(orderId, shopifyDomain, shopifyToken) {
   };
 }
 
-/** Warehouse (return destination) details from env; city/state from pincode if not set. */
+/** Warehouse (return destination) details - hardcoded Greater Noida address */
 async function getWarehouseDetails() {
-  const pincode = String(process.env.WAREHOUSE_PINCODE || "201318").replace(/\D/g, "").slice(0, 6);
-  const name = (process.env.WAREHOUSE_NAME || "Satmi Warehouse").trim();
-  const address = (process.env.WAREHOUSE_ADDRESS || "Warehouse").trim();
-  const phone = (process.env.WAREHOUSE_PHONE || "").trim() || "9999999999";
-  const pincodeDetails = await getPincodeDetails(pincode);
   return {
-    shipping_customer_name: name,
-    shipping_address: address,
-    shipping_address_2: (process.env.WAREHOUSE_ADDRESS_2 || "").trim(),
-    shipping_city: (pincodeDetails?.city || process.env.WAREHOUSE_CITY || "").trim() || "Noida",
-    shipping_state: (pincodeDetails?.state || process.env.WAREHOUSE_STATE || "").trim() || "Uttar Pradesh",
-    shipping_country: pincodeDetails?.country || process.env.WAREHOUSE_COUNTRY || "India",
-    shipping_pincode: pincode,
-    shipping_phone: phone,
+    shipping_customer_name: "Satmi Warehouse",
+    shipping_address: "Plot No 519, Roja Yaqubpur, Sec 16B",
+    shipping_address_2: "Greater Noida",
+    shipping_city: "Greater Noida",
+    shipping_state: "Uttar Pradesh",
+    shipping_country: "India",
+    shipping_pincode: "201318",
+    shipping_phone: "9999999999",
   };
 }
 
@@ -150,7 +145,7 @@ export async function getShiprocketToken() {
  *    to enable automatic return order creation without manual review
  */
 export async function createReturnOrder(params) {
-  const { orderId, customerName, email, phone, originalCourier, testMode = false } = params;
+  const { orderId, customerName, email, phone, originalCourier, testMode = false, warehouseAddress } = params;
 
   const SHIPROCKET_EMAIL = process.env.SHIPROCKET_EMAIL;
   const SHIPROCKET_PASSWORD = process.env.SHIPROCKET_PASSWORD;
@@ -272,7 +267,7 @@ export async function createReturnOrder(params) {
     };
   }
 
-  const warehouse = await getWarehouseDetails();
+  const warehouse = warehouseAddress || await getWarehouseDetails();
   const orderDate = (pickup.order?.created_at && new Date(pickup.order.created_at).toISOString().split("T")[0]) || new Date().toISOString().split("T")[0];
   const firstLineItem = pickup.order?.line_items?.[0];
   const itemName = (firstLineItem?.name || "Return").slice(0, 100);
@@ -282,7 +277,6 @@ export async function createReturnOrder(params) {
   const orderPayload = {
     order_id: String(orderId).slice(0, 50),
     order_date: orderDate,
-    pickup_location: "warehouse", // Auto-fetch warehouse address saved in Shiprocket
     pickup_customer_name: pickupName,
     pickup_address: pickupAddress1,
     pickup_address_2: pickupAddress2,
@@ -292,7 +286,14 @@ export async function createReturnOrder(params) {
     pickup_pincode: String(pickupPincode),
     pickup_phone: String(pickupPhone).replace(/\D/g, "").slice(-10) || pickupPhone,
     pickup_email: pickupEmail,
-    ...warehouse,
+    shipping_customer_name: warehouse.shipping_customer_name || warehouse.name,
+    shipping_address: warehouse.shipping_address || warehouse.address,
+    shipping_address_2: warehouse.shipping_address_2 || warehouse.address2,
+    shipping_city: warehouse.shipping_city || warehouse.city,
+    shipping_state: warehouse.shipping_state || warehouse.state,
+    shipping_country: warehouse.shipping_country || warehouse.country || "India",
+    shipping_pincode: String(warehouse.shipping_pincode || warehouse.pincode),
+    shipping_phone: String(warehouse.shipping_phone || warehouse.phone),
     length: 10,
     breadth: 10,
     height: 10,

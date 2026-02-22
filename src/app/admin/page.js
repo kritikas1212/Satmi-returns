@@ -26,6 +26,7 @@ export default function AdminDashboard() {
   const [rejectModal, setRejectModal] = useState({ open: false, request: null, reason: "" });
   const [approveModal, setApproveModal] = useState({ open: false, request: null });
   const [labelLoadingId, setLabelLoadingId] = useState(null);
+  const [warehouseModal, setWarehouseModal] = useState({ open: false, request: null, address: null });
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -167,6 +168,26 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleUpdateWarehouseAddress = async (request, newAddress) => {
+    if (processingId) return;
+    setProcessingId(request.id);
+    try {
+      const returnRef = doc(db, "returns", request.id);
+      await updateDoc(returnRef, {
+        warehouseAddress: newAddress,
+        updatedAt: new Date(),
+        updatedBy: user.email
+      });
+      setWarehouseModal({ open: false, request: null, address: null });
+      alert("Warehouse address updated successfully!");
+    } catch (error) {
+      console.error("Warehouse update error:", error);
+      alert("Error: " + error.message);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   const handleLogout = async () => {
     await signOut(auth);
     router.replace("/admin/login");
@@ -249,6 +270,7 @@ export default function AdminDashboard() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order / Customer</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items & Reason</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Warehouse Address</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Video</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
@@ -298,6 +320,29 @@ export default function AdminDashboard() {
                           )}
                         </td>
                         <td className="px-4 py-3">
+                          <div className="text-sm text-gray-900">
+                            {req.warehouseAddress?.shipping_address || "Plot No 519, Roja Yaqubpur, Sec 16B"}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {req.warehouseAddress?.shipping_city || "Greater Noida"}, {req.warehouseAddress?.shipping_state || "Uttar Pradesh"} {req.warehouseAddress?.shipping_pincode || "201318"}
+                          </div>
+                          <button
+                            onClick={() => setWarehouseModal({ open: true, request: req, address: req.warehouseAddress || {
+                              shipping_customer_name: "Satmi Warehouse",
+                              shipping_address: "Plot No 519, Roja Yaqubpur, Sec 16B",
+                              shipping_address_2: "Greater Noida",
+                              shipping_city: "Greater Noida",
+                              shipping_state: "Uttar Pradesh",
+                              shipping_country: "India",
+                              shipping_pincode: "201318",
+                              shipping_phone: "9999999999"
+                            }})}
+                            className="text-xs text-blue-600 hover:text-blue-800 underline mt-1"
+                          >
+                            Edit Address
+                          </button>
+                        </td>
+                        <td className="px-4 py-3">
                           {req.videoUrl ? (
                             <a
                               href={req.videoUrl}
@@ -335,7 +380,7 @@ export default function AdminDashboard() {
                                 </button>
                               </>
                             )}
-                            {status === "Approved" && req.shiprocketShipmentId && (
+                            {(status === "Approved") && req.shiprocketShipmentId && (
                               <button
                                 onClick={() => handleGenerateLabel(req)}
                                 disabled={labelLoadingId === req.id}
@@ -433,6 +478,110 @@ export default function AdminDashboard() {
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60"
               >
                 {processingId === rejectModal.request.id ? "Rejecting…" : "Reject"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Warehouse Address Edit Modal */}
+      {warehouseModal.open && warehouseModal.request && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Edit Warehouse Address</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Update warehouse address for order <strong>{warehouseModal.request.orderId}</strong>.
+              This will be used when creating the return shipment.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Warehouse Name</label>
+                <input
+                  type="text"
+                  value={warehouseModal.address.shipping_customer_name || ""}
+                  onChange={(e) => setWarehouseModal(m => ({ ...m, address: { ...m.address, shipping_customer_name: e.target.value } }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900"
+                  placeholder="Satmi Warehouse"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 1</label>
+                <input
+                  type="text"
+                  value={warehouseModal.address.shipping_address || ""}
+                  onChange={(e) => setWarehouseModal(m => ({ ...m, address: { ...m.address, shipping_address: e.target.value } }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900"
+                  placeholder="Plot No 519, Roja Yaqubpur, Sec 16B"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 2</label>
+                <input
+                  type="text"
+                  value={warehouseModal.address.shipping_address_2 || ""}
+                  onChange={(e) => setWarehouseModal(m => ({ ...m, address: { ...m.address, shipping_address_2: e.target.value } }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900"
+                  placeholder="Greater Noida"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                  <input
+                    type="text"
+                    value={warehouseModal.address.shipping_city || ""}
+                    onChange={(e) => setWarehouseModal(m => ({ ...m, address: { ...m.address, shipping_city: e.target.value } }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900"
+                    placeholder="Greater Noida"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                  <input
+                    type="text"
+                    value={warehouseModal.address.shipping_state || ""}
+                    onChange={(e) => setWarehouseModal(m => ({ ...m, address: { ...m.address, shipping_state: e.target.value } }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900"
+                    placeholder="Uttar Pradesh"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Pincode</label>
+                  <input
+                    type="text"
+                    value={warehouseModal.address.shipping_pincode || ""}
+                    onChange={(e) => setWarehouseModal(m => ({ ...m, address: { ...m.address, shipping_pincode: e.target.value } }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900"
+                    placeholder="201318"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                  <input
+                    type="text"
+                    value={warehouseModal.address.shipping_phone || ""}
+                    onChange={(e) => setWarehouseModal(m => ({ ...m, address: { ...m.address, shipping_phone: e.target.value } }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900"
+                    placeholder="9999999999"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => setWarehouseModal({ open: false, request: null, address: null })}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleUpdateWarehouseAddress(warehouseModal.request, warehouseModal.address)}
+                disabled={processingId === warehouseModal.request.id}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60"
+              >
+                {processingId === warehouseModal.request.id ? "Updating…" : "Update Address"}
               </button>
             </div>
           </div>

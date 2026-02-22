@@ -25,6 +25,13 @@ export async function POST(request) {
       );
     }
 
+    // Get return request details to fetch warehouse address
+    const { doc, getDoc } = await import('firebase/firestore');
+    const { db } = await import('@/lib/firebaseConfig');
+    const returnDoc = await getDoc(doc(db, "returns", returnId));
+    const returnData = returnDoc.data();
+    const warehouseAddress = returnData?.warehouseAddress;
+
     // 1. Create RTO (server-side; no fetch to self)
     const createData = await createReturnOrder({
       orderId,
@@ -32,6 +39,7 @@ export async function POST(request) {
       email,
       phone,
       originalCourier,
+      warehouseAddress,
       testMode: false,
     });
 

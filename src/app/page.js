@@ -157,7 +157,7 @@ export default function ReturnPortal() {
     }
   };
 
-  // --- NUCLEAR SUBMIT (SAVES TO FIRESTORE) ---
+  // --- AUTOMATED RETURN SUBMIT ---
   const handleBulkSubmit = async () => {
     if (!videoFile) { alert("Please upload a video showing all items."); return; }
     if (!userEmail) { alert("Please enter your email address."); return; }
@@ -169,28 +169,7 @@ export default function ReturnPortal() {
       await uploadBytes(storageRef, videoFile);
       const videoUrl = await getDownloadURL(storageRef);
 
-      // 2. Prepare Data for Firestore
-      const returnData = {
-        status: "Pending", // Used in Admin Dashboard
-        createdAt: serverTimestamp(),
-        userId: user.uid,
-        customerName: selectedItems[0].customerName,
-        email: userEmail,
-        phone: phoneNumber,
-        orderId: selectedItems[0].orderId,
-        // Save courier info for automation
-        originalCourier: selectedItems[0].originalCourier || "Unknown",
-        items: selectedItems,
-        reason: commonReason,
-        comments: comments,
-        videoUrl: videoUrl,
-        pincode: "201318" // Hardcoded for warehouse logic
-      };
-
-      // 3. Save to Firestore (The Reliable Step)
-      await addDoc(collection(db, "returns"), returnData);
-
-      // 4. Call automated return API
+      // 2. Call automated return API (saves to Firestore automatically)
       try {
         const response = await fetch('/api/submit-return', {
           method: 'POST',
@@ -211,14 +190,16 @@ export default function ReturnPortal() {
         const result = await response.json();
         if (!result.success) {
           console.error('Automated return failed:', result.error);
-          // Still show success since Firestore save worked
+          alert("Error: " + (result.error || "Return processing failed"));
+          return;
         }
       } catch (apiErr) {
         console.error('API call failed:', apiErr);
-        // Don't fail the user experience if API fails
+        alert("Error: " + apiErr.message);
+        return;
       }
 
-      alert("Return Request Submitted Successfully! Check your email for the return shipping label.");
+      alert("Return Request Submitted Successfully! We will review and email you shortly.");
       
       // Reset Form
       setSelectedItems([]);
