@@ -190,7 +190,35 @@ export default function ReturnPortal() {
       // 3. Save to Firestore (The Reliable Step)
       await addDoc(collection(db, "returns"), returnData);
 
-      alert("Return Request Submitted Successfully! We will review and email you shortly.");
+      // 4. Call automated return API
+      try {
+        const response = await fetch('/api/submit-return', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: selectedItems[0].orderId,
+            customerName: selectedItems[0].customerName,
+            email: userEmail,
+            itemTitle: selectedItems.map(item => item.title).join(', '),
+            phone: phoneNumber,
+            reason: commonReason,
+            comments: comments,
+            videoUrl: videoUrl,
+            originalCourier: selectedItems[0].originalCourier
+          }),
+        });
+        
+        const result = await response.json();
+        if (!result.success) {
+          console.error('Automated return failed:', result.error);
+          // Still show success since Firestore save worked
+        }
+      } catch (apiErr) {
+        console.error('API call failed:', apiErr);
+        // Don't fail the user experience if API fails
+      }
+
+      alert("Return Request Submitted Successfully! Check your email for the return shipping label.");
       
       // Reset Form
       setSelectedItems([]);

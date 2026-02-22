@@ -141,6 +141,13 @@ export async function getShiprocketToken() {
  * Create RTO in Shiprocket.
  * Pickup = customer address (where order was delivered). Delivery = warehouse.
  * Returns { success, shipmentId, awb, courier } or { success: false, error }.
+ * 
+ * NOTE: For zero human intervention to work, ensure the following in Shiprocket Dashboard:
+ * 1. Go to Settings → API & Webhooks → API Settings
+ * 2. Enable "Auto-approve return requests" if available
+ * 3. Ensure your API user has "Returns Management" permissions
+ * 4. Some Shiprocket plans may require manual approval - contact Shiprocket support
+ *    to enable automatic return order creation without manual review
  */
 export async function createReturnOrder(params) {
   const { orderId, customerName, email, phone, originalCourier, testMode = false } = params;
@@ -201,13 +208,59 @@ export async function createReturnOrder(params) {
   }
 
   let couriers = rateData.data.available_courier_companies;
-  const surface = couriers.filter((c) => c.mode_name && c.mode_name.toLowerCase() === "surface");
-  const validCouriers = surface.length > 0 ? surface : couriers;
+  
+  // Advanced Courier Selection Logic
+  // 1. Filter to only include: Delhivery, Xpressbees, Shiprocket, or Ekart
+  const allowedCouriers = ['delhivery', 'xpressbees', 'shiprocket', 'ekart'];
+  let filteredCouriers = couriers.filter(c => {
+    const courierName = c.courier_name.toLowerCase();
+    return allowedCouriers.some(allowed => courierName.includes(allowed));
+  });
+  
+  // 2. Filter shipping mode to strictly select Surface Delivery
+  const surfaceCouriers = filteredCouriers.filter((c) => c.mode_name && c.mode_name.toLowerCase() === "surface");
+  const validCouriers = surfaceCouriers.length > 0 ? surfaceCouriers : filteredCouriers;
+  
+  // 3. Sort by rate to find cheapest
   validCouriers.sort((a, b) => a.rate - b.rate);
-  const cheapest = validCouriers[0];
-  let selected = cheapest;
-  const delhivery = validCouriers.find((c) => c.courier_name.toLowerCase().includes("delhivery"));
-  if (delhivery && delhivery.rate - cheapest.rate <= 5) selected = delhivery;
+  const cheapestSurfaceCourier = validCouriers[0];
+  
+  let selected = cheapestSurfaceCourier;
+  
+  // 4. Find original courier price if available
+  let originalCourierPrice = null;
+  if (originalCourier) {
+    const originalCourierData = couriers.find(c => 
+      c.courier_name.toLowerCase().includes(originalCourier.toLowerCase())
+    );
+    if (originalCourierData) {
+      originalCourierPrice = originalCourierData.rate;
+    }
+  }
+  
+  // 5. Apply the Math Logic
+  if (originalCourierPrice !== null && cheapestSurfaceCourier) {
+    const priceDifference = Math.abs(cheapestSurfaceCourier.rate - originalCourierPrice);
+    
+    // If difference <= ₹5, select Original Courier
+    // If difference > ₹5, select Cheapest Surface Courier
+    if (priceDifference <= 5) {
+      const originalCourierInFiltered = validCouriers.find(c => 
+        c.courier_name.toLowerCase().includes(originalCourier.toLowerCase())
+      );
+      if (originalCourierInFiltered) {
+        selected = originalCourierInFiltered;
+      }
+    }
+  }
+  
+  // Fallback: If no filtered couriers found, use original logic
+  if (!selected) {
+    const surface = couriers.filter((c) => c.mode_name && c.mode_name.toLowerCase() === "surface");
+    const fallbackCouriers = surface.length > 0 ? surface : couriers;
+    fallbackCouriers.sort((a, b) => a.rate - b.rate);
+    selected = fallbackCouriers[0];
+  }
 
   if (testMode) {
     return {
@@ -229,6 +282,7 @@ export async function createReturnOrder(params) {
   const orderPayload = {
     order_id: String(orderId).slice(0, 50),
     order_date: orderDate,
+    pickup_location: "warehouse", // Auto-fetch warehouse address saved in Shiprocket
     pickup_customer_name: pickupName,
     pickup_address: pickupAddress1,
     pickup_address_2: pickupAddress2,
