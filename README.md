@@ -62,9 +62,8 @@ npm run dev
    - Authentication → Users → Add user: use an allowed email (e.g. `kritika@satmi.in`, `support@satmi.in`) and set a password.
 2. **Allowed emails** are defined in `src/lib/adminConfig.js`. Only these emails can open the dashboard.
 3. Open **[/admin/login](http://localhost:3000/admin/login)** → sign in with that email/password → you are redirected to **[/admin](http://localhost:3000/admin)**.
-4. **Approve**: Choose “Approve”, optionally set pickup pincode (customer’s pincode for pickup), then confirm. This creates the return order in Shiprocket and stores AWB/shipment ID in Firestore.
-5. **Get label**: For approved requests, use “Get label” to generate the shipping label PDF; the link is saved and available as “Download label”.
-6. **Reject**: Choose “Reject” and optionally add a reason; status is stored in Firestore.
+4. **Approve**: Click “Approve” — the app finds the order in Shopify and auto-fills the RTO (pickup = customer’s delivery address, shipping = warehouse from env). Shiprocket RTO is created, label generated, and email sent to the customer. No manual data entry.
+5. **Reject**: Choose “Reject” and optionally add a reason; status is stored in Firestore.
 
 ## Project Structure
 

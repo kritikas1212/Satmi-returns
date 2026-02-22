@@ -24,7 +24,7 @@ export default function AdminDashboard() {
   const [processingId, setProcessingId] = useState(null);
   const [statusFilter, setStatusFilter] = useState("Pending");
   const [rejectModal, setRejectModal] = useState({ open: false, request: null, reason: "" });
-  const [approveModal, setApproveModal] = useState({ open: false, request: null, pickupPincode: "" });
+  const [approveModal, setApproveModal] = useState({ open: false, request: null });
   const [labelLoadingId, setLabelLoadingId] = useState(null);
 
   useEffect(() => {
@@ -67,40 +67,46 @@ export default function AdminDashboard() {
     rejected: returns.filter((r) => r.status === "Rejected").length,
   };
 
-  const handleApprove = async (request, pickupPincode) => {
+  const handleApprove = async (request) => {
     if (processingId) return;
     setProcessingId(request.id);
     try {
-      const pincode = pickupPincode?.trim() || request.pincode || "201318";
-      const shiprocketRes = await fetch("/api/shiprocket", {
+      const res = await fetch("/api/returns/approve-and-send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          returnId: request.id,
           orderId: request.orderId,
           customerName: request.customerName,
           email: request.email,
           phone: request.phone,
-          pincode,
           originalCourier: request.originalCourier,
-          testMode: false,
         }),
       });
-      const shiprocketData = await shiprocketRes.json();
-      if (!shiprocketData.success) {
-        throw new Error(shiprocketData.error || "Shiprocket API failed");
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(res.ok ? "Invalid response" : `Request failed (${res.status}). Check console.`);
+      }
+      if (!data.success) {
+        throw new Error(data.error || "Approve failed");
       }
 
       const returnRef = doc(db, "returns", request.id);
       await updateDoc(returnRef, {
         status: "Approved",
-        shiprocketAwb: shiprocketData.awb || "PENDING",
-        shiprocketCourier: shiprocketData.courier || "Unknown",
-        shiprocketShipmentId: shiprocketData.shipmentId ?? null,
+        shiprocketAwb: data.awb || "PENDING",
+        shiprocketCourier: data.courier || "Unknown",
+        shiprocketShipmentId: data.shipmentId ?? null,
+        labelUrl: data.labelUrl ?? null,
         approvedAt: new Date(),
         approvedBy: user.email,
       });
 
-      setApproveModal({ open: false, request: null, pickupPincode: "" });
+      setApproveModal({ open: false, request: null });
+      if (data.labelUrl) window.open(data.labelUrl, "_blank");
+      alert(`RTO created. Label ${data.labelUrl ? "opened and " : ""}emailed to ${request.email}.`);
     } catch (error) {
       console.error("Approve error:", error);
       alert("Error: " + error.message);
@@ -149,12 +155,9 @@ export default function AdminDashboard() {
         const returnRef = doc(db, "returns", request.id);
         await updateDoc(returnRef, { labelUrl });
         window.open(labelUrl, "_blank");
-      } else if (data.raw?.label_url) {
-        const returnRef = doc(db, "returns", request.id);
-        await updateDoc(returnRef, { labelUrl: data.raw.label_url });
-        window.open(data.raw.label_url, "_blank");
       } else {
-        alert("Label generated but URL not returned. Check Shiprocket panel.");
+        console.warn("Shiprocket label response without URL:", data.raw || data);
+        alert("Label generated but URL was not clearly provided. Please check Shiprocket panel for the label.");
       }
     } catch (error) {
       console.error("Label error:", error);
@@ -314,11 +317,7 @@ export default function AdminDashboard() {
                               <>
                                 <button
                                   onClick={() =>
-                                    setApproveModal({
-                                      open: true,
-                                      request: req,
-                                      pickupPincode: req.pincode || "201318",
-                                    })
+                                    setApproveModal({ open: true, request: req })
                                   }
                                   disabled={processingId === req.id}
                                   className="px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-60"
@@ -377,36 +376,22 @@ export default function AdminDashboard() {
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-2">Approve return</h2>
             <p className="text-sm text-gray-600 mb-4">
-              Create Shiprocket return order and generate AWB for{" "}
-              <strong>{approveModal.request.orderId}</strong>.
+              Create RTO, generate label, and email the customer for order <strong>{approveModal.request.orderId}</strong>.
+              Pickup address is taken from Shopify; label is sent to {approveModal.request.email}.
             </p>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Pickup pincode (customer)
-              </label>
-              <input
-                type="text"
-                value={approveModal.pickupPincode}
-                onChange={(e) =>
-                  setApproveModal((m) => ({ ...m, pickupPincode: e.target.value }))
-                }
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900"
-                placeholder="e.g. 201318"
-              />
-            </div>
             <div className="flex gap-3 justify-end">
               <button
-                onClick={() => setApproveModal({ open: false, request: null, pickupPincode: "" })}
+                onClick={() => setApproveModal({ open: false, request: null })}
                 className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
               >
                 Cancel
               </button>
               <button
-                onClick={() => handleApprove(approveModal.request, approveModal.pickupPincode)}
+                onClick={() => handleApprove(approveModal.request)}
                 disabled={processingId === approveModal.request.id}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-60"
               >
-                {processingId === approveModal.request.id ? "Processing…" : "Approve & create label"}
+                {processingId === approveModal.request.id ? "Processing…" : "Approve & create RTO"}
               </button>
             </div>
           </div>

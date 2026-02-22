@@ -1,23 +1,9 @@
 import { NextResponse } from "next/server";
-
-async function getShiprocketToken() {
-  const res = await fetch("https://apiv2.shiprocket.in/v1/external/auth/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      email: process.env.SHIPROCKET_EMAIL,
-      password: process.env.SHIPROCKET_PASSWORD,
-    }),
-  });
-  if (!res.ok) throw new Error("Shiprocket login failed");
-  const data = await res.json();
-  return data.token;
-}
+import { generateLabel } from "@/lib/shiprocketServer";
 
 /**
- * POST body: { shipmentId: number } or { shipmentIds: number[] }
- * Returns: { success, labelUrl } or { success: false, error }
- * Shiprocket: Generate label for return order(s).
+ * POST body: { shipmentId } or { shipmentIds }
+ * Generate label for Shiprocket return order.
  */
 export async function POST(request) {
   try {
@@ -34,7 +20,9 @@ export async function POST(request) {
     const shipmentId = body.shipmentId ?? body.shipment_id;
     const shipmentIds = body.shipmentIds ?? body.order_id;
     const orderIds = shipmentIds
-      ? (Array.isArray(shipmentIds) ? shipmentIds : [shipmentIds])
+      ? Array.isArray(shipmentIds)
+        ? shipmentIds
+        : [shipmentIds]
       : shipmentId != null
       ? [Number(shipmentId)]
       : null;
@@ -46,39 +34,17 @@ export async function POST(request) {
       );
     }
 
-    const token = await getShiprocketToken();
-
-    const labelRes = await fetch(
-      "https://apiv2.shiprocket.in/v1/external/courier/generate/label",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ order_id: orderIds }),
-      }
-    );
-
-    const labelData = await labelRes.json();
-
-    if (!labelRes.ok) {
+    const result = await generateLabel(orderIds[0]);
+    if (!result.success) {
       return NextResponse.json(
-        { success: false, error: labelData.message || JSON.stringify(labelData) },
-        { status: labelRes.status }
+        { success: false, error: result.error },
+        { status: 400 }
       );
     }
-
-    const labelUrl =
-      labelData.label_url ||
-      labelData.label_urls?.[0] ||
-      labelData.url ||
-      labelData.shipment_label_url;
-
     return NextResponse.json({
       success: true,
-      labelUrl: labelUrl || null,
-      raw: labelData,
+      labelUrl: result.labelUrl,
+      raw: result.raw,
     });
   } catch (error) {
     console.error("Shiprocket label error:", error);
