@@ -103,7 +103,7 @@ async function getWarehouseDetails() {
     shipping_city: "Greater Noida",
     shipping_state: "Uttar Pradesh",
     shipping_country: "India",
-    shipping_pincode: "201318",
+    shipping_pincode: "201306",
     shipping_phone: "9999999999",
   };
 }
@@ -145,7 +145,7 @@ export async function getShiprocketToken() {
  *    to enable automatic return order creation without manual review
  */
 export async function createReturnOrder(params) {
-  const { orderId, customerName, email, phone, originalCourier, testMode = false, warehouseAddress } = params;
+  const { orderId, customerName, email, phone, originalCourier, testMode = false, warehouseAddress, shopifyOrderData } = params;
 
   const SHIPROCKET_EMAIL = process.env.SHIPROCKET_EMAIL;
   const SHIPROCKET_PASSWORD = process.env.SHIPROCKET_PASSWORD;
@@ -271,8 +271,14 @@ export async function createReturnOrder(params) {
   const orderDate = (pickup.order?.created_at && new Date(pickup.order.created_at).toISOString().split("T")[0]) || new Date().toISOString().split("T")[0];
   const firstLineItem = pickup.order?.line_items?.[0];
   const itemName = (firstLineItem?.name || "Return").slice(0, 100);
-  const itemPrice = Number(firstLineItem?.price) || 100;
-  const subTotal = Math.max(1, Math.round(itemPrice));
+  
+  // Use accurate refund amount from Shopify data or fallback to item price
+  let subTotal = 100; // Default fallback
+  if (shopifyOrderData?.refundAmount) {
+    subTotal = Math.max(1, Math.round(parseFloat(shopifyOrderData.refundAmount)));
+  } else if (firstLineItem?.price) {
+    subTotal = Math.max(1, Math.round(Number(firstLineItem.price)));
+  }
 
   const orderPayload = {
     order_id: String(orderId).slice(0, 50),

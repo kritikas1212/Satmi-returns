@@ -25,12 +25,13 @@ export async function POST(request) {
       );
     }
 
-    // Get return request details to fetch warehouse address
+    // Get return request details to fetch warehouse address and Shopify data
     const { doc, getDoc } = await import('firebase/firestore');
     const { db } = await import('@/lib/firebaseConfig');
     const returnDoc = await getDoc(doc(db, "returns", returnId));
     const returnData = returnDoc.data();
     const warehouseAddress = returnData?.warehouseAddress;
+    const shopifyOrderData = returnData?.shopifyOrderData;
 
     // 1. Create RTO (server-side; no fetch to self)
     const createData = await createReturnOrder({
@@ -40,6 +41,7 @@ export async function POST(request) {
       phone,
       originalCourier,
       warehouseAddress,
+      shopifyOrderData,
       testMode: false,
     });
 
