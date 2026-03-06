@@ -17,12 +17,44 @@ const firebaseConfig = {
 // Validate required client credentials (avoid invalid-app-credential)
 const required = ["apiKey", "authDomain", "projectId", "appId"];
 const missing = required.filter((key) => !firebaseConfig[key]);
-if (typeof window !== "undefined" && missing.length > 0) {
-  console.warn("[Firebase] Missing env:", missing.join(", "), "— set NEXT_PUBLIC_FIREBASE_* in .env.local");
+
+if (typeof window !== "undefined") {
+  if (missing.length > 0) {
+    console.error("[Firebase] CRITICAL: Missing environment variables:", missing.join(", "));
+    console.error("[Firebase] Please set these in your .env.local file:");
+    missing.forEach(key => {
+      console.error(`  NEXT_PUBLIC_${key.toUpperCase()}`);
+    });
+  } else {
+    console.log("[Firebase] Configuration loaded successfully:", {
+      hasApiKey: !!firebaseConfig.apiKey,
+      hasAuthDomain: !!firebaseConfig.authDomain,
+      hasProjectId: !!firebaseConfig.projectId,
+      hasAppId: !!firebaseConfig.appId,
+      authDomain: firebaseConfig.authDomain,
+      projectId: firebaseConfig.projectId
+    });
+  }
 }
 
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+// Only initialize Firebase if we have the required config
+let app;
+let auth;
+let storage;
+let db;
 
-export const auth = getAuth(app);
-export const storage = getStorage(app);
-export const db = getFirestore(app);
+if (missing.length === 0) {
+  try {
+    app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+    auth = getAuth(app);
+    storage = getStorage(app);
+    db = getFirestore(app);
+    console.log("[Firebase] App initialized successfully");
+  } catch (error) {
+    console.error("[Firebase] Failed to initialize Firebase app:", error);
+  }
+} else {
+  console.error("[Firebase] Skipping Firebase initialization due to missing configuration");
+}
+
+export { auth, storage, db };

@@ -26,7 +26,7 @@ export async function GET(request) {
     }
 
     const nameQuery = orderNumber.replace(/^#/, "");
-    const url = `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/orders.json?name=${encodeURIComponent(nameQuery)}&limit=1`;
+    const url = `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2025-01/orders.json?name=${encodeURIComponent(nameQuery)}&limit=1`;
     const res = await fetch(url, {
       headers: { "X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN },
     });

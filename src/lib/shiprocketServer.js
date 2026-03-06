@@ -33,7 +33,7 @@ async function getShopifyOrderAddress(orderId, shopifyDomain, shopifyToken) {
   if (!nameQuery) return null;
 
   // 1) Try direct lookup by order name (fast path)
-  let url = `https://${shopifyDomain}/admin/api/2024-01/orders.json?name=${encodeURIComponent(
+  let url = `https://${shopifyDomain}/admin/api/2025-01/orders.json?name=${encodeURIComponent(
     nameQuery
   )}&limit=1`;
   let res = await fetch(url, {
@@ -45,7 +45,7 @@ async function getShopifyOrderAddress(orderId, shopifyDomain, shopifyToken) {
   // 2) Fallback: scan recent orders if direct name lookup fails
   if (!order) {
     const allOrders = [];
-    let nextUrl = `https://${shopifyDomain}/admin/api/2024-01/orders.json?status=any&limit=250`;
+    let nextUrl = `https://${shopifyDomain}/admin/api/2025-01/orders.json?status=any&limit=250`;
     const maxPages = 5;
 
     for (let page = 0; page < maxPages; page++) {

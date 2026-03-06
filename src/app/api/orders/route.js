@@ -46,14 +46,24 @@ export async function POST(request) {
     // ---------------------------------------------------------
     // 3. STRATEGY A: CUSTOMER SEARCH (encode query so + is not lost)
     // ---------------------------------------------------------
-    const headers = { "X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN };
+    const headers = { 
+      "X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN,
+      'User-Agent': 'Satmi-Returns/1.0'
+    };
+    
     for (const query of searchQueries) {
-      const searchUrl = `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/customers/search.json?query=${encodeURIComponent(query)}`;
-      const res = await fetch(searchUrl, { headers });
-      const data = await res.json();
-      if (data.customers?.length > 0) {
-        customerId = data.customers[0].id;
-        break;
+      try {
+        const searchUrl = `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2025-01/customers/search.json?query=${encodeURIComponent(query)}`;
+        const res = await fetch(searchUrl, { headers });
+        const data = await res.json();
+        if (data.customers?.length > 0) {
+          customerId = data.customers[0].id;
+          break;
+        }
+      } catch (error) {
+        console.error('Customer search error:', error);
+        // Continue to next query if SSL fails
+        continue;
       }
     }
 
@@ -61,24 +71,36 @@ export async function POST(request) {
     // 4. STRATEGY B: ORDERS BY CUSTOMER OR PAGINATED ORDER SEARCH
     // ---------------------------------------------------------
     if (customerId) {
-      const historyUrl = `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/customers/${customerId}/orders.json?status=any&limit=250`;
-      const historyRes = await fetch(historyUrl, { headers });
-      const historyData = await historyRes.json();
-      orders = historyData.orders || [];
-    } else {
+      try {
+        const historyUrl = `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2025-01/customers/${customerId}/orders.json?status=any&limit=250`;
+        const historyRes = await fetch(historyUrl, { headers });
+        const historyData = await historyRes.json();
+        orders = historyData.orders || [];
+      } catch (error) {
+        console.error('Customer orders fetch error:', error);
+        // Fall back to paginated search if customer orders fail
+      }
+    }
+    
+    if (orders.length === 0) {
       // Guest / no customer match: fetch multiple pages of orders and match by phone
       const allRecentOrders = [];
-      let nextPageUrl = `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/orders.json?status=any&limit=250`;
+      let nextPageUrl = `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2025-01/orders.json?status=any&limit=250`;
       const maxPages = 5;
       for (let page = 0; page < maxPages; page++) {
-        const res = await fetch(nextPageUrl, { headers });
-        const data = await res.json();
-        const list = data.orders || [];
-        allRecentOrders.push(...list);
-        const linkHeader = res.headers.get("Link");
-        const nextMatch = linkHeader && linkHeader.match(/<([^>]+)>;\s*rel="next"/);
-        if (!nextMatch || list.length < 250) break;
-        nextPageUrl = nextMatch[1];
+        try {
+          const res = await fetch(nextPageUrl, { headers });
+          const data = await res.json();
+          const list = data.orders || [];
+          allRecentOrders.push(...list);
+          const linkHeader = res.headers.get("Link");
+          const nextMatch = linkHeader && linkHeader.match(/<([^>]+)>;\s*rel="next"/);
+          if (!nextMatch || list.length < 250) break;
+          nextPageUrl = nextMatch[1];
+        } catch (error) {
+          console.error(`Page ${page + 1} fetch error:`, error);
+          break; // Stop pagination on error
+        }
       }
 
       const matchByPhone = (phoneStr) => {
@@ -95,7 +117,50 @@ export async function POST(request) {
     }
 
     // ---------------------------------------------------------
-    // 5. ENRICH ORDERS (Delivery Status Logic)
+    // 5. ENRICH LINE ITEMS WITH PRODUCT IMAGES
+    //    Shopify REST line_items don't always include images.
+    //    Batch-fetch products by ID in a single call to get images.
+    // ---------------------------------------------------------
+    const productIds = new Set();
+    orders.forEach(order => {
+      (order.line_items || []).forEach(item => {
+        if (item.product_id) productIds.add(item.product_id);
+      });
+    });
+
+    const productImageMap = {};
+    if (productIds.size > 0) {
+      try {
+        const idsParam = Array.from(productIds).slice(0, 250).join(',');
+        const productsUrl = `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2025-01/products.json?ids=${idsParam}&fields=id,images`;
+        const productsRes = await fetch(productsUrl, { headers });
+        if (productsRes.ok) {
+          const productsData = await productsRes.json();
+          (productsData.products || []).forEach(product => {
+            if (product.images?.[0]?.src) {
+              productImageMap[product.id] = product.images[0].src;
+            }
+          });
+        }
+      } catch (e) {
+        console.error('Product images fetch error (non-fatal):', e);
+      }
+    }
+
+    // Attach images to line items that are missing them
+    orders.forEach(order => {
+      (order.line_items || []).forEach(item => {
+        if (!item.image && item.product_id && productImageMap[item.product_id]) {
+          item.image = { src: productImageMap[item.product_id] };
+        }
+      });
+    });
+
+    // ---------------------------------------------------------
+    // 6. ENRICH ORDERS (Delivery Status Logic)
+    //    Optimization: only make fulfillment events API calls for
+    //    orders that are marked "delivered" by Shopify — skip the
+    //    rest to avoid O(n) network roundtrips that cause 12s+ load.
     // ---------------------------------------------------------
     const enrichedOrders = await Promise.all(orders.map(async (order) => {
       const fulfillment = (order.fulfillments || []).find((f) => f.tracking_number);
@@ -103,43 +168,92 @@ export async function POST(request) {
       let deliveredDate = null;
       let isReturnable = false;
       let statusMessage = "Processing";
+      let returnEligibilityReason = "";
 
-      if (fulfillment && fulfillment.shipment_status === 'delivered') {
-        try {
-           const eventsUrl = `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/orders/${order.id}/fulfillments/${fulfillment.id}/events.json`;
-           const eventsRes = await fetch(eventsUrl, { headers });
-           const eventsData = await eventsRes.json();
-           
-           const deliveredEvent = (eventsData.fulfillment_events || []).find((e) => e.status === "delivered");
-           if (deliveredEvent) {
-             deliveredDate = deliveredEvent.happened_at; 
-             const deliveryTime = new Date(deliveredDate).getTime();
-             const threeDaysLater = deliveryTime + (3 * 24 * 60 * 60 * 1000);
-             const now = Date.now();
+      // Check order financial status first
+      if (order.financial_status === 'refunded') {
+        statusMessage = "Order Refunded";
+        returnEligibilityReason = "This order has been fully refunded and is not eligible for returns";
+        isReturnable = false;
+      } else if (order.financial_status === 'voided') {
+        statusMessage = "Order Voided";
+        returnEligibilityReason = "This order was voided and is not eligible for returns";
+        isReturnable = false;
+      } else if (order.cancelled_at) {
+        statusMessage = "Order Cancelled";
+        returnEligibilityReason = "This order was cancelled and is not eligible for returns";
+        isReturnable = false;
+      } else if (fulfillment && fulfillment.shipment_status === 'delivered') {
+        // Only fetch fulfillment events for actually-delivered orders
+        // Use the fulfillment created_at as a fast fallback to avoid the extra API call entirely
+        const fulfillmentCreated = new Date(fulfillment.created_at || order.created_at).getTime();
+        const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+        const now = Date.now();
 
-             if (now <= threeDaysLater) {
-               isReturnable = true;
-               statusMessage = "Eligible for Return";
-             } else {
-               isReturnable = false;
-               statusMessage = "Return Window Closed (Over 3 Days)";
-             }
-           } else {
-             // If marked delivered but no event date found, allow return if recent creation
-             statusMessage = "Delivered";
-             isReturnable = true;
-           }
-        } catch (e) {
-           statusMessage = "Delivered (Date Verify Failed)";
-           isReturnable = true; // Fallback to allow return if API fails
+        // If the fulfillment is older than 10 days, don't even bother checking events
+        if (now - fulfillmentCreated > 10 * 24 * 60 * 60 * 1000) {
+          statusMessage = "Return Window Closed";
+          returnEligibilityReason = "Return window closed. Delivered more than 3 days ago";
+          isReturnable = false;
+        } else {
+          // Recent fulfillment — fetch events to get exact delivery date
+          try {
+            const eventsUrl = `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2025-01/orders/${order.id}/fulfillments/${fulfillment.id}/events.json`;
+            const eventsRes = await fetch(eventsUrl, { headers });
+            const eventsData = await eventsRes.json();
+
+            const deliveredEvent = (eventsData.fulfillment_events || []).find((e) => e.status === "delivered");
+            if (deliveredEvent) {
+              deliveredDate = deliveredEvent.happened_at;
+              const deliveryTime = new Date(deliveredDate).getTime();
+
+              if (now <= deliveryTime + threeDaysMs) {
+                isReturnable = true;
+                statusMessage = "Eligible for Return";
+                returnEligibilityReason = "This item was delivered recently and is eligible for return";
+              } else {
+                isReturnable = false;
+                statusMessage = "Return Window Closed";
+                returnEligibilityReason = `Return window closed. Delivered more than 3 days ago (${new Date(deliveredDate).toLocaleDateString()})`;
+              }
+            } else {
+              // Marked delivered but no event date — use fulfillment date
+              if (now <= fulfillmentCreated + 7 * 24 * 60 * 60 * 1000) {
+                statusMessage = "Delivered";
+                isReturnable = true;
+                returnEligibilityReason = "This item was delivered recently and is eligible for return";
+              } else {
+                statusMessage = "Delivered (Date Unknown)";
+                isReturnable = false;
+                returnEligibilityReason = "This item was delivered too long ago and is not eligible for return";
+              }
+            }
+          } catch (e) {
+            console.error('Fulfillment events fetch error:', e);
+            // Fallback: allow return if fulfillment is recent
+            if (now <= fulfillmentCreated + threeDaysMs) {
+              statusMessage = "Delivered";
+              isReturnable = true;
+              returnEligibilityReason = "This item was delivered recently and is eligible for return";
+            } else {
+              statusMessage = "Delivered (Status Check Failed)";
+              returnEligibilityReason = "Unable to verify delivery date. Please contact support";
+              isReturnable = false;
+            }
+          }
         }
       } else if (fulfillment && fulfillment.status === 'success') {
-         statusMessage = "Delivered"; 
-         isReturnable = true; 
+         statusMessage = "Shipped"; 
+         returnEligibilityReason = "This item has been shipped but not yet delivered";
+         isReturnable = false; 
       } else if (fulfillment) {
          statusMessage = "In Transit";
+         returnEligibilityReason = "This item is currently in transit and not yet eligible for return";
+         isReturnable = false;
       } else {
          statusMessage = "Not Shipped Yet";
+         returnEligibilityReason = "This item has not been shipped yet and is not eligible for return";
+         isReturnable = false;
       }
 
       return {
@@ -147,7 +261,8 @@ export async function POST(request) {
         delivery_status: {
           delivered_date: deliveredDate,
           is_returnable: isReturnable,
-          message: statusMessage
+          message: statusMessage,
+          eligibility_reason: returnEligibilityReason
         }
       };
     }));

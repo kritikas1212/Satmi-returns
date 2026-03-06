@@ -1,10 +1,67 @@
 import { NextResponse } from 'next/server';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, query, where, getDocs, collection } from 'firebase/firestore';
 import { db } from '@/lib/firebaseConfig';
+import { z } from 'zod';
 
 const FROM_EMAIL = "Satmi Support <support@satmi.in>";
 
-// Fetch Shopify order details
+// Validation schemas
+const SubmitReturnSchema = z.object({
+  orderId: z.string().min(1, "Order ID is required").max(50, "Order ID too long"),
+  customerName: z.string().min(1, "Customer name is required").max(100, "Customer name too long"),
+  email: z.string().email("Invalid email format").min(1, "Email is required"),
+  items: z.array(z.object({
+    lineItemId: z.string().min(1, "Line item ID is required"),
+    id: z.string().min(1, "Item ID is required"),
+    title: z.string().min(1, "Item title is required"),
+    quantity: z.number().min(1, "Quantity must be at least 1").max(100, "Quantity too high"),
+    price: z.number().min(0, "Price must be positive").max(999999, "Price too high")
+  })).min(1, "At least one item is required").max(20, "Too many items"),
+  phone: z.string().min(10, "Phone number is required").max(20, "Phone number too long"),
+  reason: z.string().min(1, "Return reason is required").max(500, "Return reason too long"),
+  comments: z.string().max(1000, "Comments too long").optional(),
+  videoUrl: z.string().url("Invalid video URL").min(1, "Video URL is required"),
+  originalCourier: z.string().max(100, "Courier name too long").optional()
+});
+
+// Check if line items already have returns (idempotency check)
+async function checkExistingReturns(orderId, lineItemIds) {
+  try {
+    const returnsQuery = query(
+      collection(db, "returns"),
+      where("orderId", "==", orderId)
+    );
+    
+    const querySnapshot = await getDocs(returnsQuery);
+    const existingReturns = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    // Check if any of the selected line item IDs have already been returned
+    const existingLineItemIds = new Set();
+    existingReturns.forEach(returnDoc => {
+      if (returnDoc.items && Array.isArray(returnDoc.items)) {
+        returnDoc.items.forEach(item => {
+          if (item.lineItemId) {
+            existingLineItemIds.add(item.lineItemId);
+          }
+        });
+      }
+    });
+    
+    // Find which items have already been returned
+    const alreadyReturned = lineItemIds.filter(id => existingLineItemIds.has(id));
+    
+    return {
+      hasExistingReturns: alreadyReturned.length > 0,
+      alreadyReturned,
+      existingReturns
+    };
+  } catch (error) {
+    console.error("Error checking existing returns:", error);
+    return { hasExistingReturns: false, alreadyReturned: [] };
+  }
+}
+
+// Fetch Shopify order details using GraphQL
 async function fetchShopifyOrder(orderId) {
   const SHOPIFY_STORE_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN;
   const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
@@ -14,21 +71,91 @@ async function fetchShopifyOrder(orderId) {
     return null;
   }
 
+  // Clean domain - remove .myshopify.com if it's already included
+  const rawDomain = SHOPIFY_STORE_DOMAIN.replace('.myshopify.com', '');
+  const graphqlEndpoint = `https://${rawDomain}.myshopify.com/admin/api/2025-01/graphql.json`;
+
+  const graphqlQuery = `
+    query getOrderByNumber($query: String!) {
+      orders(first: 1, query: $query) {
+        edges {
+          node {
+            id
+            name
+            orderNumber
+            totalPriceSet {
+              shopMoney {
+                amount
+                currencyCode
+              }
+            }
+            lineItems(first: 50) {
+              edges {
+                node {
+                  id
+                  title
+                  quantity
+                  originalUnitPriceSet {
+                    shopMoney {
+                      amount
+                      currencyCode
+                    }
+                  }
+                  variant {
+                    id
+                    sku
+                    title
+                  }
+                }
+              }
+            }
+            fulfillments(first: 10) {
+              edges {
+                node {
+                  createdAt
+                  trackingInfo {
+                    company
+                    number
+                    url
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
   try {
-    const response = await fetch(`https://${SHOPIFY_STORE_DOMAIN}.myshopify.com/admin/api/2023-10/orders/${orderId}.json`, {
+    const response = await fetch(graphqlEndpoint, {
+      method: 'POST',
       headers: {
         'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN,
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+        'User-Agent': 'Satmi-Returns/1.0'
+      },
+      body: JSON.stringify({
+        query: graphqlQuery,
+        variables: { query: `name:${orderId}` }
+      }),
+      cache: 'no-store'
     });
-    
+
     if (!response.ok) {
-      console.error(`Shopify API error: ${response.status}`);
+      console.error(`Shopify GraphQL error: ${response.status}`);
       return null;
     }
-    
+
     const data = await response.json();
-    return data.order;
+    
+    if (data.errors) {
+      console.error(`Shopify GraphQL errors: ${JSON.stringify(data.errors)}`);
+      return null;
+    }
+
+    const orders = data.data?.orders?.edges?.map(edge => edge.node) || [];
+    return orders.length > 0 ? orders[0] : null;
   } catch (error) {
     console.error("Error fetching Shopify order:", error);
     return null;
@@ -37,18 +164,85 @@ async function fetchShopifyOrder(orderId) {
 
 export async function POST(request) {
   try {
+    // Verify Firestore is configured
+    if (!db) {
+      console.error('Firestore not configured — Firebase client SDK missing or env vars not set');
+      return NextResponse.json(
+        { success: false, error: 'Server configuration error. Please contact support.', code: 'DB_NOT_CONFIGURED' },
+        { status: 503 }
+      );
+    }
+
     const body = await request.json();
+    
+    // Validate request body
+    const validationResult = SubmitReturnSchema.safeParse(body);
+    
+    if (!validationResult.success) {
+      const errorMessages = validationResult.error.errors.map(err => `${err.path.join('.')}: ${err.message}`).join(', ');
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: "Invalid request format", 
+          code: "VALIDATION_ERROR",
+          details: errorMessages 
+        },
+        { status: 400 }
+      );
+    }
+    
     const { 
       orderId, 
       customerName, 
       email, 
-      itemTitle, 
+      items, // Array of items being returned with lineItemId
       phone, 
       reason, 
       comments, 
-      videoUrl,
+      videoUrl, // Now this is the public URL from direct upload
       originalCourier
-    } = body;
+    } = validationResult.data;
+
+    // Validate items array
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return NextResponse.json(
+        { success: false, error: "Items array is required and cannot be empty", code: "MISSING_ITEMS" },
+        { status: 400 }
+      );
+    }
+
+    // Extract line item IDs for idempotency check
+    const lineItemIds = items.map(item => item.lineItemId).filter(Boolean);
+    
+    if (lineItemIds.length === 0) {
+      return NextResponse.json(
+        { success: false, error: "Items must include lineItemId for idempotency check", code: "MISSING_LINE_ITEM_IDS" },
+        { status: 400 }
+      );
+    }
+
+    // Check for existing returns (idempotency)
+    const existingCheck = await checkExistingReturns(orderId, lineItemIds);
+    
+    if (existingCheck.hasExistingReturns) {
+      const itemTitles = existingCheck.alreadyReturned.map(id => {
+        const item = items.find(i => i.lineItemId === id);
+        return item?.title || id;
+      }).join(', ');
+      
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: `Return request already exists for: ${itemTitles}`, 
+          code: "DUPLICATE_RETURN",
+          details: {
+            alreadyReturnedItems: existingCheck.alreadyReturned,
+            existingReturns: existingCheck.existingReturns
+          }
+        },
+        { status: 409 }
+      );
+    }
 
     // Fetch Shopify order details for accurate refund amount
     const shopifyOrder = await fetchShopifyOrder(orderId);
@@ -58,10 +252,22 @@ export async function POST(request) {
     let refundAmount = 0;
     
     if (shopifyOrder) {
-      orderTotal = parseFloat(shopifyOrder.total_price || 0);
-      // Calculate refund amount based on returned items (for now assume full order)
-      // TODO: Calculate based on specific items being returned
-      refundAmount = orderTotal;
+      orderTotal = parseFloat(shopifyOrder.totalPriceSet?.shopMoney?.amount || 0);
+      
+      // Calculate refund amount based on returned items
+      if (items.length > 0) {
+        refundAmount = 0;
+        for (const returnItem of items) {
+          const lineItem = shopifyOrder.lineItems?.edges?.find(
+            edge => edge.node.id === returnItem.lineItemId
+          );
+          
+          if (lineItem) {
+            const itemPrice = parseFloat(lineItem.node.originalUnitPriceSet?.shopMoney?.amount || 0);
+            refundAmount += itemPrice * (returnItem.quantity || 1);
+          }
+        }
+      }
     }
 
     // Save to Firestore for manual review
@@ -70,11 +276,14 @@ export async function POST(request) {
         orderId,
         customerName,
         email,
-        itemTitle,
+        items: items.map(item => ({
+          ...item,
+          lineItemId: item.lineItemId // Store line item ID for idempotency
+        })),
         phone,
         reason,
         comments: comments || "No comments",
-        videoUrl,
+        videoUrl, // This is now the public URL from Firebase Storage
         originalCourier,
         status: "Pending",
         createdAt: serverTimestamp(),
@@ -82,9 +291,9 @@ export async function POST(request) {
         shopifyOrderData: {
           orderTotal: orderTotal,
           refundAmount: refundAmount,
-          currency: shopifyOrder?.currency || "INR",
-          orderDate: shopifyOrder?.created_at || null,
-          financialStatus: shopifyOrder?.financial_status || "paid"
+          currency: shopifyOrder?.totalPriceSet?.shopMoney?.currencyCode || "INR",
+          orderDate: shopifyOrder?.createdAt || null,
+          financialStatus: "paid"
         },
         warehouseAddress: {
           shipping_customer_name: "Satmi Warehouse",
@@ -101,16 +310,28 @@ export async function POST(request) {
       await setDoc(doc(db, "returns", `${orderId}_${Date.now()}`), returnDoc);
     } catch (firestoreErr) {
       console.error("Firestore logging failed:", firestoreErr);
-      return NextResponse.json({ error: "Failed to save return request" }, { status: 500 });
+      return NextResponse.json(
+        { success: false, error: "Failed to save return request", code: "FIRESTORE_ERROR", details: firestoreErr.message }, 
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
       success: true,
-      message: "Return request submitted successfully. We will review and email you shortly."
+      message: "Return request submitted successfully. We will review and email you shortly.",
+      data: {
+        refundAmount,
+        currency: shopifyOrder?.totalPriceSet?.shopMoney?.currencyCode || "INR",
+        orderId,
+        itemCount: items.length
+      }
     });
 
   } catch (error) {
     console.error('Submit return error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: "Internal server error", code: "INTERNAL_ERROR", details: error.message }, 
+      { status: 500 }
+    );
   }
 }
