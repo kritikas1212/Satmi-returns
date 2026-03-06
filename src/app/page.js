@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { auth, storage, db } from "../lib/firebaseConfig";
 import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, query, where, getDocs } from "firebase/firestore";
 
 export default function ReturnPortal() {
   // --- STATE ---
@@ -36,6 +36,10 @@ export default function ReturnPortal() {
   const [comments, setComments] = useState(""); 
   const [userEmail, setUserEmail] = useState(""); 
   const [videoFile, setVideoFile] = useState(null);
+
+  // DUPLICATE RETURN TRACKING STATE
+  const [returnedLineItemIds, setReturnedLineItemIds] = useState(new Set());
+  const [duplicateReturnWarning, setDuplicateReturnWarning] = useState("");
 
   // CANCELLATION STATE
   const [isCancelling, setIsCancelling] = useState(false);
@@ -327,6 +331,38 @@ export default function ReturnPortal() {
     }
   };
 
+  // --- FETCH RETURN HISTORY FROM FIREBASE ---
+  const fetchReturnHistory = async (phone) => {
+    if (!db) return;
+    setLoadingReturns(true);
+    try {
+      const returnsQuery = query(
+        collection(db, "returns"),
+        where("phone", "==", phone)
+      );
+      const querySnapshot = await getDocs(returnsQuery);
+      const returns = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setReturnHistory(returns);
+
+      // Build a set of all line item IDs that already have returns
+      const returnedIds = new Set();
+      returns.forEach(returnDoc => {
+        if (returnDoc.items && Array.isArray(returnDoc.items)) {
+          returnDoc.items.forEach(item => {
+            if (item.lineItemId) {
+              returnedIds.add(item.lineItemId);
+            }
+          });
+        }
+      });
+      setReturnedLineItemIds(returnedIds);
+    } catch (err) {
+      console.error("Error fetching return history:", err);
+    } finally {
+      setLoadingReturns(false);
+    }
+  };
+
   // --- ORDER FETCHING (RESTORED FROM WORKING VERSION) ---
   const fetchOrders = async (phone, token) => {
     setLoading(true);
@@ -476,7 +512,20 @@ export default function ReturnPortal() {
     return { eligible: true, reason: null };
   };
 
+  // Check if a specific line item already has an existing return
+  const isItemAlreadyReturned = (item) => {
+    const itemId = item.node?.id || item.id;
+    return returnedLineItemIds.has(String(itemId));
+  };
+
   const handleGlobalItemSelection = (order, item) => {
+    // Check for duplicate return
+    if (isItemAlreadyReturned(item)) {
+      setDuplicateReturnWarning("A return request has already been created for this product. Please contact Satmi support at support@satmi.in for further assistance.");
+      return;
+    }
+    setDuplicateReturnWarning("");
+
     // Create a unique identifier for this specific line item within this specific order
     const orderIdentifier = order.name || order.orderNumber || order.id;
     // Handle both GraphQL 'node' structure and flat REST structure
@@ -678,10 +727,15 @@ export default function ReturnPortal() {
       
       // Reset Form
       setSelectedItems([]);
+      setGlobalSelectedItems([]);
       setIsModalOpen(false);
       setVideoFile(null);
       setComments("");
       setUserEmail("");
+      setDuplicateReturnWarning("");
+
+      // Refresh return history to update duplicate tracking
+      fetchReturnHistory(phoneNumber);
       
     } catch (err) {
       console.error(err);
@@ -698,6 +752,7 @@ export default function ReturnPortal() {
       setUser(currentUser);
       if (currentUser) {
         fetchOrders(phoneNumber, null); // Fetch orders when logged in
+        fetchReturnHistory(phoneNumber); // Fetch existing returns for duplicate detection
       }
     });
     return () => unsubscribe();
@@ -714,7 +769,7 @@ export default function ReturnPortal() {
         <div className="bg-white p-8 md:p-14 rounded shadow-sm z-10 border border-[#e5e0d8] w-[85vw] md:w-[50vw]">
           <div className="text-center mb-8">
             <h1 className="font-serif text-2xl md:text-3xl text-[#3a3a3a] tracking-widest uppercase mb-3">Satmi Returns</h1>
-            <p className="text-gray-300 text-xs md:text-sm uppercase tracking-wide">Enter your details to initiate return</p>
+            <p className="text-black text-xs md:text-sm uppercase tracking-wide">Enter your details to initiate return</p>
           </div>
           
           <div className="space-y-6">
@@ -947,6 +1002,16 @@ export default function ReturnPortal() {
             </div>
           </div>
         )}
+        {duplicateReturnWarning && (
+          <div className="max-w-7xl mx-auto mt-4 px-4">
+            <div className="bg-amber-50 border-2 border-amber-400 text-amber-900 px-4 py-4 rounded-lg text-sm font-semibold flex items-start gap-3">
+              <svg className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+              <span>{duplicateReturnWarning}</span>
+            </div>
+          </div>
+        )}
 
         {/* Main Content Area */}
         <div className="max-w-7xl mx-auto px-4 py-6">
@@ -1010,19 +1075,21 @@ export default function ReturnPortal() {
                               const eligibility = checkEligibility(item, order);
                               const itemId = item.node?.id || item.id;
                               const isSelected = globalSelectedItems.some(i => i.uniqueId === `${order.name}-${itemId}`);
+                              const alreadyReturned = isItemAlreadyReturned(item);
+                              const isDisabled = !eligibility.eligible || alreadyReturned;
                               // Thumbnail: REST orders have item.image?.src; GraphQL have item.image?.url
                               const thumbSrc = item.image?.src || item.image?.url || item.node?.image?.url || null;
                               
                               return (
-                                <div key={item.id || item.node?.id || index} className="flex items-center space-x-3 p-3 border border-gray-100 rounded-lg">
+                                <div key={item.id || item.node?.id || index} className={`flex items-center space-x-3 p-3 border rounded-lg ${alreadyReturned ? 'border-amber-300 bg-amber-50' : 'border-gray-100'}`}>
                                   {/* Checkbox */}
                                   <input 
                                     type="checkbox" 
                                     checked={isSelected}
-                                    disabled={!eligibility.eligible}
+                                    disabled={isDisabled}
                                     onChange={() => handleGlobalItemSelection(order, item)}
                                     className={`rounded border-gray-300 text-[#7A1E1E] focus:ring-[#7A1E1E] ${
-                                      !eligibility.eligible ? 'opacity-50 cursor-not-allowed' : ''
+                                      isDisabled ? 'opacity-50 cursor-not-allowed' : ''
                                     }`}
                                   />
                                   
@@ -1046,15 +1113,23 @@ export default function ReturnPortal() {
                                   {/* Status Badge */}
                                   <div className="text-right">
                                     <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                                      eligibility.eligible
-                                        ? "bg-green-100 text-green-800" 
-                                        : "bg-red-100 text-red-800"
+                                      alreadyReturned
+                                        ? "bg-amber-100 text-amber-800"
+                                        : eligibility.eligible
+                                          ? "bg-green-100 text-green-800" 
+                                          : "bg-red-100 text-red-800"
                                     }`}>
-                                      {eligibility.eligible ? "Eligible for Return" : 
+                                      {alreadyReturned ? "Return Requested" :
+                                       eligibility.eligible ? "Eligible for Return" : 
                                        eligibility.reason === "Return window closed" ? "Return Window Closed" : 
                                        "Not Delivered Yet"}
                                     </span>
-                                    {!eligibility.eligible && eligibility.reason === "You can create return after product has been delivered" && (
+                                    {alreadyReturned && (
+                                      <p className="text-xs text-amber-700 mt-1 max-w-xs">
+                                        Already has a return request
+                                      </p>
+                                    )}
+                                    {!alreadyReturned && !eligibility.eligible && eligibility.reason === "You can create return after product has been delivered" && (
                                       <p className="text-xs text-red-600 mt-1 max-w-xs">
                                         You can create return after product has been delivered
                                       </p>
@@ -1091,17 +1166,19 @@ export default function ReturnPortal() {
                                 const eligibility = checkEligibility(item, order);
                                 const itemId = item.id;
                                 const isSelected = globalSelectedItems.some(i => i.uniqueId === `${order.name}-${itemId}`);
+                                const alreadyReturned = isItemAlreadyReturned(item);
+                                const isDisabled = !eligibility.eligible || alreadyReturned;
                                 
                                 return (
-                                  <tr key={`${order.name}-${itemId || index}`} className="hover:bg-gray-50">
+                                  <tr key={`${order.name}-${itemId || index}`} className={alreadyReturned ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-gray-50'}>
                                     <td className="px-4 py-3">
                                       <input 
                                         type="checkbox" 
                                         checked={isSelected}
-                                        disabled={!eligibility.eligible}
+                                        disabled={isDisabled}
                                         onChange={() => handleGlobalItemSelection(order, item)}
                                         className={`rounded border-gray-300 text-[#7A1E1E] focus:ring-[#7A1E1E] ${
-                                          !eligibility.eligible ? 'opacity-50 cursor-not-allowed' : ''
+                                          isDisabled ? 'opacity-50 cursor-not-allowed' : ''
                                         }`}
                                       />
                                     </td>
@@ -1129,11 +1206,14 @@ export default function ReturnPortal() {
                                     <td className="px-4 py-3 text-sm text-gray-900">₹{item.price}</td>
                                     <td className="px-4 py-3">
                                       <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                                        eligibility.eligible
-                                          ? "bg-green-100 text-green-800" 
-                                          : "bg-red-100 text-red-800"
+                                        alreadyReturned
+                                          ? "bg-amber-100 text-amber-800"
+                                          : eligibility.eligible
+                                            ? "bg-green-100 text-green-800" 
+                                            : "bg-red-100 text-red-800"
                                       }`}>
-                                        {eligibility.eligible ? "Eligible" : 
+                                        {alreadyReturned ? "Return Requested" :
+                                         eligibility.eligible ? "Eligible" : 
                                          eligibility.reason === "Return window closed" ? "Window Closed" : 
                                          "Not Delivered"}
                                       </span>
