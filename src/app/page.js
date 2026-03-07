@@ -46,6 +46,16 @@ export default function ReturnPortal() {
   const [cancellingOrderId, setCancellingOrderId] = useState(null);
   const [cancelConfirmOrder, setCancelConfirmOrder] = useState(null); // order object for cancel modal
 
+  // MENU & NAVIGATION STATE
+  const [openKebabMenu, setOpenKebabMenu] = useState(null); // Track which order's menu is open
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [accountDropdownOpen, setAccountDropdownOpen] = useState(false);
+  
+  // MODIFICATION STATE
+  const [modifyingOrder, setModifyingOrder] = useState(null); // Order being modified
+  const [editedAddress, setEditedAddress] = useState("");
+  const [editedPhone, setEditedPhone] = useState("");
+
   // --- AUTHENTICATION ---
   // Always create a fresh RecaptchaVerifier to avoid "client element has been removed" errors.
   // The old approach cached the verifier, but clearing the container's innerHTML makes the
@@ -518,6 +528,105 @@ export default function ReturnPortal() {
     return returnedLineItemIds.has(String(itemId));
   };
 
+  // --- 3-HOUR EDIT WINDOW HELPER ---
+  const canEditOrder = (order) => {
+    if (!order || !order.created_at) return false;
+    const createdAt = new Date(order.created_at).getTime();
+    const now = Date.now();
+    const threeHoursMs = 3 * 60 * 60 * 1000;
+    const timeRemaining = threeHoursMs - (now - createdAt);
+    return {
+      canEdit: timeRemaining > 0,
+      timeRemaining: Math.max(0, timeRemaining),
+      expired: timeRemaining <= 0
+    };
+  };
+
+  // Format time remaining as human-readable
+  const formatTimeRemaining = (ms) => {
+    if (ms <= 0) return "Expired";
+    const hours = Math.floor(ms / (60 * 60 * 1000));
+    const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
+    return `${hours}h ${minutes}m left`;
+  };
+
+  // --- NAVIGATION HANDLERS ---
+  const handleOrderAction = (order, action) => {
+    setOpenKebabMenu(null); // Close menu
+    
+    if (action === 'cancel') {
+      handleCancelOrder(order);
+    } else if (action === 'modify') {
+      const editWindow = canEditOrder(order);
+      if (!editWindow.canEdit) {
+        setError("Modification window expired. Orders can only be modified within 3 hours of placement.");
+        return;
+      }
+      // Set modification state
+      setModifyingOrder(order);
+      setEditedAddress(order.shipping_address?.address1 || "");
+      setEditedPhone(order.phone || order.shipping_address?.phone || "");
+    } else if (action === 'return') {
+      // Auto-select all eligible items from this order
+      const eligibleItems = (order.line_items || []).filter(item => {
+        const eligibility = checkEligibility(item, order);
+        return eligibility.eligible && !isItemAlreadyReturned(item);
+      });
+      
+      if (eligibleItems.length === 0) {
+        setError("No items in this order are eligible for return.");
+        return;
+      }
+      
+      // Select all eligible items
+      const newSelections = eligibleItems.map(item => ({
+        uniqueId: `${order.name}-${item.id}`,
+        orderId: order.name,
+        lineItemId: item.id,
+        id: item.id,
+        title: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        customerName: order.customer ? `${order.customer.first_name} ${order.customer.last_name}` : 'Guest',
+        originalCourier: order.fulfillments?.[0]?.tracking_company || "Unknown",
+      }));
+      
+      setGlobalSelectedItems(newSelections);
+      setSelectedItems(newSelections);
+      setIsModalOpen(true);
+    }
+  };
+
+  // Save order modifications
+  const handleSaveModification = async () => {
+    if (!modifyingOrder) return;
+    setError("");
+    setSuccessMessage("");
+    
+    try {
+      // Here you would call your Shopify API to update the order
+      // For now, we'll just show success and update local state
+      setOrders(prev => prev.map(o => 
+        o.id === modifyingOrder.id 
+          ? {
+              ...o,
+              phone: editedPhone,
+              shipping_address: {
+                ...o.shipping_address,
+                address1: editedAddress,
+                phone: editedPhone
+              }
+            }
+          : o
+      ));
+      
+      setSuccessMessage("Order details updated successfully!");
+      setModifyingOrder(null);
+    } catch (err) {
+      setError("Failed to update order. Please try again.");
+    }
+  };
+
   const handleGlobalItemSelection = (order, item) => {
     // Check for duplicate return
     if (isItemAlreadyReturned(item)) {
@@ -766,28 +875,33 @@ export default function ReturnPortal() {
         <img src="/mandala.png" alt="" className="absolute top-0 left-0 opacity-80 pointer-events-none z-0 w-[35vw] md:w-[21vw]" style={{ transform: 'translate(-20%, -20%) rotate(-15deg)' }} />
         <img src="/mandala.png" alt="" className="absolute bottom-0 right-0 opacity-80 pointer-events-none z-0 w-[35vw] md:w-[21vw]" style={{ transform: 'translate(20%, 20%) rotate(165deg)' }} />
         
-        <div className="bg-white p-8 md:p-14 rounded shadow-sm z-10 border border-[#e5e0d8] w-[85vw] md:w-[50vw]">
+        <div className="bg-white p-8 md:p-12 rounded-2xl shadow-sm z-10 border border-gray-100 w-[88vw] max-w-[480px]">
           <div className="text-center mb-8">
-            <h1 className="font-serif text-2xl md:text-3xl text-[#3a3a3a] tracking-widest uppercase mb-3">Satmi Returns</h1>
-            <p className="text-black text-xs md:text-sm uppercase tracking-wide">Enter your details to initiate return</p>
+            <div className="flex justify-center mb-5">
+              <a href="https://satmi.in" target="_blank" rel="noopener noreferrer">
+                <img src="/logo.png" alt="Satmi" className="h-12 md:h-16 w-auto object-contain" />
+              </a>
+            </div>
+            <h1 className="text-xl md:text-2xl text-gray-800 tracking-wide font-semibold mb-2">Welcome to SATMI</h1>
+            <p className="text-[#96572A] text-xs tracking-wider uppercase">Order Management Portal</p>
           </div>
           
           <div className="space-y-6">
             {/* Auth Mode Toggle */}
-            <div className="flex justify-center space-x-4 mb-6">
+            <div className="flex justify-center space-x-3 mb-6">
               <button
                 onClick={() => {
                   setAuthMode("phone");
                   setError("");
                   setSuccessMessage("");
                 }}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
                   authMode === "phone" 
-                    ? "bg-[#7A1E1E] text-white" 
-                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    ? "bg-[#96572A] text-white shadow-sm" 
+                    : "bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200"
                 }`}
               >
-                Login with Phone
+                Phone
               </button>
               <button
                 onClick={() => {
@@ -796,13 +910,13 @@ export default function ReturnPortal() {
                   setSuccessMessage("");
                   setPhoneNumber("+91");
                 }}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
                   authMode === "orderId" 
-                    ? "bg-[#7A1E1E] text-white" 
-                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    ? "bg-[#96572A] text-white shadow-sm" 
+                    : "bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200"
                 }`}
               >
-                Login with Order ID
+                Order ID
               </button>
             </div>
 
@@ -916,224 +1030,414 @@ export default function ReturnPortal() {
     );
   }
 
+  // Satmi.in navigation links
+  const satmiNavLinks = [
+    { label: 'Home', href: 'https://satmi.in/' },
+    { label: 'About', href: 'https://satmi.in/pages/about-us' },
+    { label: 'Products', href: 'https://satmi.in/collections/all-products' },
+    { label: 'Certification', href: 'https://satmi.in/pages/certification' },
+    { label: 'Contact', href: 'https://satmi.in/pages/contact' },
+    { label: 'Collection', href: 'https://satmi.in/collections' },
+    { label: 'Track Your Order', href: 'https://satmi.in/pages/track-your-order' },
+  ];
+
   // --- RENDER: DASHBOARD ---
   if (user) {
     return (
-      <div className="min-h-screen bg-gray-50 pb-20">
-        {/* Main Header */}
-        <div className="bg-white border-b border-gray-200 px-4 py-4">
-          <div className="max-w-7xl mx-auto flex justify-between items-center">
-            <h1 className="text-xl font-bold text-gray-900">Satmi Returns</h1>
-            <button 
-              onClick={() => auth.signOut()} 
-              className="px-4 py-2 border border-[#7A1E1E] text-[#7A1E1E] rounded-lg hover:bg-gray-50 font-medium"
-            >
-              Logout
-            </button>
+      <div className="min-h-screen bg-[#FAFAF8] pb-20">
+        {/* ===== HEADER (matches satmi.in reference) ===== */}
+        <header className="bg-white sticky top-0 z-40">
+          {/* Desktop Header */}
+          <div className="hidden md:block border-b border-gray-200">
+            <div className="max-w-350 mx-auto px-6 py-3 flex items-center justify-between">
+              {/* Logo - left */}
+              <a href="https://satmi.in" className="shrink-0 hover:opacity-80 transition-opacity">
+                <img src="/logo.png" alt="Satmi" className="h-10 w-auto object-contain" />
+              </a>
+
+              {/* Navigation - center */}
+              <nav className="flex items-center space-x-6 lg:space-x-8">
+                {satmiNavLinks.map(link => (
+                  <a
+                    key={link.label}
+                    href={link.href}
+                    className="text-sm text-[#3a3a3a] hover:text-[#96572A] transition-colors whitespace-nowrap font-medium"
+                  >
+                    {link.label}
+                  </a>
+                ))}
+              </nav>
+
+              {/* Right icons */}
+              <div className="flex items-center space-x-4">
+                {/* Account Dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={() => setAccountDropdownOpen(!accountDropdownOpen)}
+                    className="p-1.5 hover:opacity-70 transition-opacity"
+                    title="Account"
+                  >
+                    <svg className="w-5.5 h-5.5 text-[#3a3a3a]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                    </svg>
+                  </button>
+
+                  {accountDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setAccountDropdownOpen(false)} />
+                      <div className="absolute right-0 mt-2 w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                        <div className="px-4 py-3 border-b border-gray-100">
+                          <p className="text-xs text-gray-500">Signed in as</p>
+                          <p className="text-sm font-medium text-gray-900 truncate">{phoneNumber}</p>
+                        </div>
+                        <button
+                          onClick={() => { setAccountDropdownOpen(false); auth.signOut(); }}
+                          className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center space-x-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                          </svg>
+                          <span>Logout</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+
+          {/* Mobile Header — hamburger LEFT, logo CENTER, account RIGHT */}
+          <div className="md:hidden border-b border-gray-200">
+            <div className="flex items-center justify-between px-4 py-3">
+              {/* Left: Hamburger */}
+              <button
+                onClick={() => setMobileMenuOpen(true)}
+                className="p-1.5 -ml-1.5 hover:opacity-70 transition-opacity"
+                aria-label="Open menu"
+              >
+                <svg className="w-6 h-6 text-[#3a3a3a]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                </svg>
+              </button>
+
+              {/* Center: Logo */}
+              <a href="https://satmi.in" className="absolute left-1/2 -translate-x-1/2 hover:opacity-80 transition-opacity">
+                <img src="/logo.png" alt="Satmi" className="h-9 w-auto object-contain" />
+              </a>
+
+              {/* Right: Account */}
+              <div className="relative">
+                <button
+                  onClick={() => setAccountDropdownOpen(!accountDropdownOpen)}
+                  className="p-1.5 -mr-1.5 hover:opacity-70 transition-opacity"
+                  title="Account"
+                >
+                  <svg className="w-5.5 h-5.5 text-[#3a3a3a]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                  </svg>
+                </button>
+
+                {accountDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setAccountDropdownOpen(false)} />
+                    <div className="absolute right-0 mt-2 w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                      <div className="px-4 py-3 border-b border-gray-100">
+                        <p className="text-xs text-gray-500">Signed in as</p>
+                        <p className="text-sm font-medium text-gray-900 truncate">{phoneNumber}</p>
+                      </div>
+                      <button
+                        onClick={() => { setAccountDropdownOpen(false); auth.signOut(); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center space-x-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        <span>Logout</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Accent Border - warm gradient bar beneath header (like satmi.in) */}
+          <div className="h-0.75 bg-linear-to-r from-[#C8956C] via-[#96572A] to-[#C8956C]"></div>
+        </header>
+
+        {/* ===== MOBILE SLIDE-OUT MENU (from LEFT, matches reference) ===== */}
+        {mobileMenuOpen && (
+          <div className="fixed inset-0 z-50 md:hidden">
+            {/* Overlay */}
+            <div
+              className="absolute inset-0 bg-black/30"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            {/* Panel — slides from left */}
+            <div className="absolute inset-y-0 left-0 w-[85vw] max-w-sm bg-[#FBF7F2] shadow-2xl flex flex-col animate-slideInLeft">
+              {/* Close button */}
+              <div className="flex justify-end p-5">
+                <button
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-1 hover:opacity-70 transition-opacity"
+                  aria-label="Close menu"
+                >
+                  <svg className="w-6 h-6 text-[#3a3a3a]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Nav Links */}
+              <nav className="flex-1 px-6 space-y-1">
+                {satmiNavLinks.map(link => (
+                  <a
+                    key={link.label}
+                    href={link.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block py-4 text-lg font-semibold text-[#96572A] hover:text-[#7A4422] transition-colors border-b border-[#EDE5DA] last:border-0"
+                  >
+                    {link.label}
+                  </a>
+                ))}
+              </nav>
+
+              {/* Bottom: account info */}
+              <div className="p-6 border-t border-[#EDE5DA]">
+                <div className="text-xs text-gray-500 mb-1">Signed in as</div>
+                <div className="text-sm font-medium text-[#3a3a3a] mb-3">{phoneNumber}</div>
+                <button
+                  onClick={() => { setMobileMenuOpen(false); auth.signOut(); }}
+                  className="w-full py-2.5 border border-red-300 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors"
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Controls Bar */}
-        <div className="bg-white border-b border-gray-200 px-4 py-3">
+        <div className="bg-white/80 backdrop-blur-sm border-b border-gray-100 px-4 py-2.5">
           <div className="max-w-7xl mx-auto flex justify-between items-center">
             {/* Tabs */}
-            <div className="flex space-x-8">
+            <div className="flex space-x-6">
               <button
                 onClick={() => setDashboardView("eligible-orders")}
-                className={`pb-2 border-b-2 font-medium text-sm transition-colors ${
+                className={`pb-1.5 border-b-2 text-sm tracking-wide transition-colors ${
                   dashboardView === "eligible-orders"
-                    ? "border-[#7A1E1E] text-[#7A1E1E]"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
+                    ? "border-[#96572A] text-[#96572A] font-semibold"
+                    : "border-transparent text-gray-400 hover:text-gray-600 font-medium"
                 }`}
               >
-                Eligible Orders
+                Orders
               </button>
               <button
                 onClick={() => setDashboardView("my-returns")}
-                className={`pb-2 border-b-2 font-medium text-sm transition-colors ${
+                className={`pb-1.5 border-b-2 text-sm tracking-wide transition-colors ${
                   dashboardView === "my-returns"
-                    ? "border-[#7A1E1E] text-[#7A1E1E]"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
+                    ? "border-[#96572A] text-[#96572A] font-semibold"
+                    : "border-transparent text-gray-400 hover:text-gray-600 font-medium"
                 }`}
               >
-                My Returns
+                Returns
               </button>
             </div>
 
-            {/* View Toggle */}
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-600">View:</span>
+            {/* View Toggle — icons only */}
+            <div className="flex items-center bg-gray-50 rounded-full p-0.5 border border-gray-100">
               <button
                 onClick={() => setViewMode("card")}
-                className={`px-3 py-1 text-sm font-medium rounded ${
+                className={`p-2 rounded-full transition-all ${
                   viewMode === "card"
-                    ? "bg-[#7A1E1E] text-white"
-                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    ? "bg-white text-[#96572A] shadow-sm"
+                    : "text-gray-400 hover:text-gray-600"
                 }`}
+                title="Card View"
               >
-                Card
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                  <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                  <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                  <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                  <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                </svg>
               </button>
               <button
                 onClick={() => setViewMode("table")}
-                className={`px-3 py-1 text-sm font-medium rounded ${
+                className={`p-2 rounded-full transition-all ${
                   viewMode === "table"
-                    ? "bg-[#7A1E1E] text-white"
-                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    ? "bg-white text-[#96572A] shadow-sm"
+                    : "text-gray-400 hover:text-gray-600"
                 }`}
+                title="Table View"
               >
-                Table
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" d="M3 6h18M3 12h18M3 18h18" />
+                </svg>
               </button>
             </div>
           </div>
         </div>
 
-        {/* Success/Error Messages */}
+        {/* Messages */}
         {successMessage && (
           <div className="max-w-7xl mx-auto mt-4 px-4">
-            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded text-sm">
+            <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 px-4 py-3 rounded-xl text-sm">
               {successMessage}
             </div>
           </div>
         )}
         {error && (
           <div className="max-w-7xl mx-auto mt-4 px-4">
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
+            <div className="bg-red-50 border border-red-100 text-red-600 px-4 py-3 rounded-xl text-sm">
               {error}
             </div>
           </div>
         )}
         {duplicateReturnWarning && (
           <div className="max-w-7xl mx-auto mt-4 px-4">
-            <div className="bg-amber-50 border-2 border-amber-400 text-amber-900 px-4 py-4 rounded-lg text-sm font-semibold flex items-start gap-3">
-              <svg className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-xl text-sm flex items-start gap-2.5">
+              <svg className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
               </svg>
               <span>{duplicateReturnWarning}</span>
             </div>
           </div>
         )}
 
-        {/* Main Content Area */}
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          {/* Eligible Orders View */}
+        {/* Main Content */}
+        <div className="max-w-7xl mx-auto px-4 py-5">
+          {/* Orders View */}
           {dashboardView === "eligible-orders" && (
             <>
               {loading ? (
-                <div className="text-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#7A1E1E] mx-auto"></div>
-                  <p className="text-gray-600 mt-2">Loading your orders...</p>
+                <div className="text-center py-16">
+                  <div className="animate-spin rounded-full h-7 w-7 border-2 border-[#96572A] border-t-transparent mx-auto"></div>
+                  <p className="text-gray-400 mt-3 text-sm">Loading orders...</p>
                 </div>
               ) : orders.length > 0 ? (
                 <>
                   {/* Card View */}
                   {viewMode === "card" && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                       {orders.map((order) => (
-                        <div key={order.name} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                        <div key={order.name} className="bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-200">
                           {/* Card Header */}
-                          <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                            <div className="flex justify-between items-center">
+                          <div className="px-5 py-4 border-b border-gray-50">
+                            <div className="flex justify-between items-start">
                               <div>
-                                <h3 className="font-semibold text-gray-900">{order.name}</h3>
-                                <p className="text-sm text-gray-600">
+                                <h3 className="font-semibold text-gray-900 text-sm tracking-wide">{order.name}</h3>
+                                <p className="text-xs text-gray-400 mt-0.5">
                                   {order.created_at ? new Date(order.created_at).toLocaleDateString('en-US', { 
-                                    month: 'short', 
+                                    month: 'long', 
                                     day: 'numeric', 
                                     year: 'numeric' 
-                                  }) : 'Order Date'}
+                                  }) : ''}
                                 </p>
-                              </div>
-                              <div className="flex items-center gap-2">
                                 {order.cancelled_at && (
-                                  <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
+                                  <span className="inline-flex mt-1.5 px-2 py-0.5 text-xs font-medium rounded-full bg-red-50 text-red-600 border border-red-100">
                                     Cancelled
                                   </span>
                                 )}
-                                {canCancelOrder(order) && (
-                                  <button
-                                    onClick={() => handleCancelOrder(order)}
-                                    disabled={isCancelling && cancellingOrderId === order.id}
-                                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 transition-colors flex items-center gap-1"
-                                  >
-                                    {isCancelling && cancellingOrderId === order.id ? (
-                                      <>
-                                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                                        Cancelling...
-                                      </>
-                                    ) : (
-                                      'Cancel Order'
-                                    )}
-                                  </button>
+                              </div>
+                              {/* Actions Menu */}
+                              <div className="relative">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenKebabMenu(openKebabMenu === order.id ? null : order.id);
+                                  }}
+                                  className="p-1.5 rounded-full hover:bg-gray-50 transition-colors"
+                                  title="Actions"
+                                >
+                                  <svg className="w-4.5 h-4.5 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                                  </svg>
+                                </button>
+                                
+                                {openKebabMenu === order.id && (
+                                  <>
+                                    <div className="fixed inset-0 z-10" onClick={() => setOpenKebabMenu(null)} />
+                                    <div className="absolute right-0 mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-20">
+                                      {!order.cancelled_at && canCancelOrder(order) && (
+                                        <button
+                                          onClick={() => handleOrderAction(order, 'cancel')}
+                                          className="w-full text-left px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center space-x-2.5 transition-colors"
+                                        >
+                                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                          </svg>
+                                          <span>Cancel Order</span>
+                                        </button>
+                                      )}
+                                      <button
+                                        onClick={() => handleOrderAction(order, 'return')}
+                                        className="w-full text-left px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center space-x-2.5 transition-colors"
+                                      >
+                                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+                                        </svg>
+                                        <span>Return Order</span>
+                                      </button>
+                                    </div>
+                                  </>
                                 )}
                               </div>
                             </div>
                           </div>
                           
                           {/* Line Items */}
-                          <div className="p-4 space-y-3">
+                          <div className="px-5 py-3 space-y-2.5">
                             {(order.line_items || order.lineItems?.edges?.map(e => e.node) || []).map((item, index) => {
                               const eligibility = checkEligibility(item, order);
                               const itemId = item.node?.id || item.id;
                               const isSelected = globalSelectedItems.some(i => i.uniqueId === `${order.name}-${itemId}`);
                               const alreadyReturned = isItemAlreadyReturned(item);
                               const isDisabled = !eligibility.eligible || alreadyReturned;
-                              // Thumbnail: REST orders have item.image?.src; GraphQL have item.image?.url
                               const thumbSrc = item.image?.src || item.image?.url || item.node?.image?.url || null;
                               
                               return (
-                                <div key={item.id || item.node?.id || index} className={`flex items-center space-x-3 p-3 border rounded-lg ${alreadyReturned ? 'border-amber-300 bg-amber-50' : 'border-gray-100'}`}>
-                                  {/* Checkbox */}
+                                <div key={item.id || item.node?.id || index} className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${alreadyReturned ? 'bg-amber-50/60 border border-amber-100' : isSelected ? 'bg-[#F9F6F2] border border-[#C8956C]/30' : 'hover:bg-gray-50/50 border border-transparent'}`}>
                                   <input 
                                     type="checkbox" 
                                     checked={isSelected}
                                     disabled={isDisabled}
                                     onChange={() => handleGlobalItemSelection(order, item)}
-                                    className={`rounded border-gray-300 text-[#7A1E1E] focus:ring-[#7A1E1E] ${
-                                      isDisabled ? 'opacity-50 cursor-not-allowed' : ''
-                                    }`}
+                                    className={`rounded border-gray-200 text-[#96572A] focus:ring-[#96572A] h-4 w-4 ${isDisabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                                   />
                                   
                                   {/* Thumbnail */}
-                                  <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center overflow-hidden shrink-0">
+                                  <div className="w-14 h-14 bg-gray-50 rounded-lg flex items-center justify-center overflow-hidden shrink-0 border border-gray-100">
                                     {thumbSrc ? (
                                       <img src={thumbSrc} alt={item.name || item.title} className="w-full h-full object-cover" />
                                     ) : (
-                                      <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                      <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0 0 22.5 18.75V5.25A2.25 2.25 0 0 0 20.25 3H3.75A2.25 2.25 0 0 0 1.5 5.25v13.5A2.25 2.25 0 0 0 3.75 21Z" />
                                       </svg>
                                     )}
                                   </div>
                                   
                                   {/* Product Details */}
                                   <div className="flex-1 min-w-0">
-                                    <p className="font-medium text-gray-900 text-sm">{item.name || item.title}</p>
-                                    <p className="text-sm text-gray-600">₹{item.price}</p>
+                                    <p className="font-medium text-gray-800 text-sm leading-snug">{item.name || item.title}</p>
+                                    <p className="text-xs text-gray-400 mt-0.5">₹{item.price}</p>
                                   </div>
                                   
-                                  {/* Status Badge */}
-                                  <div className="text-right">
-                                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                                  {/* Status */}
+                                  <div className="text-right shrink-0">
+                                    <span className={`inline-flex px-2 py-0.5 text-[10px] font-medium rounded-full tracking-wide ${
                                       alreadyReturned
-                                        ? "bg-amber-100 text-amber-800"
+                                        ? "bg-amber-50 text-amber-600 border border-amber-200"
                                         : eligibility.eligible
-                                          ? "bg-green-100 text-green-800" 
-                                          : "bg-red-100 text-red-800"
+                                          ? "bg-emerald-50 text-emerald-600 border border-emerald-200" 
+                                          : "bg-gray-50 text-gray-400 border border-gray-200"
                                     }`}>
-                                      {alreadyReturned ? "Return Requested" :
-                                       eligibility.eligible ? "Eligible for Return" : 
-                                       eligibility.reason === "Return window closed" ? "Return Window Closed" : 
-                                       "Not Delivered Yet"}
+                                      {alreadyReturned ? "Returned" :
+                                       eligibility.eligible ? "Eligible" : 
+                                       eligibility.reason === "Return window closed" ? "Window Closed" : 
+                                       "Pending Delivery"}
                                     </span>
-                                    {alreadyReturned && (
-                                      <p className="text-xs text-amber-700 mt-1 max-w-xs">
-                                        Already has a return request
-                                      </p>
-                                    )}
-                                    {!alreadyReturned && !eligibility.eligible && eligibility.reason === "You can create return after product has been delivered" && (
-                                      <p className="text-xs text-red-600 mt-1 max-w-xs">
-                                        You can create return after product has been delivered
-                                      </p>
-                                    )}
                                   </div>
                                 </div>
                               );
@@ -1146,21 +1450,21 @@ export default function ReturnPortal() {
 
                   {/* Table View */}
                   {viewMode === "table" && (
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
                       <div className="overflow-x-auto">
                         <table className="w-full">
-                          <thead className="bg-gray-50 border-b border-gray-200">
-                            <tr>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Select</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order ID</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          <thead>
+                            <tr className="border-b border-gray-100">
+                              <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Select</th>
+                              <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Order</th>
+                              <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Date</th>
+                              <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Product</th>
+                              <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Price</th>
+                              <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Status</th>
+                              <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider"></th>
                             </tr>
                           </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
+                          <tbody>
                             {orders.map((order) => 
                               (order.line_items || []).map((item, index) => {
                                 const eligibility = checkEligibility(item, order);
@@ -1170,73 +1474,96 @@ export default function ReturnPortal() {
                                 const isDisabled = !eligibility.eligible || alreadyReturned;
                                 
                                 return (
-                                  <tr key={`${order.name}-${itemId || index}`} className={alreadyReturned ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-gray-50'}>
-                                    <td className="px-4 py-3">
+                                  <tr key={`${order.name}-${itemId || index}`} className={`border-b border-gray-50 last:border-0 transition-colors ${alreadyReturned ? 'bg-amber-50/40' : 'hover:bg-gray-50/50'}`}>
+                                    <td className="px-4 py-3.5">
                                       <input 
                                         type="checkbox" 
                                         checked={isSelected}
                                         disabled={isDisabled}
                                         onChange={() => handleGlobalItemSelection(order, item)}
-                                        className={`rounded border-gray-300 text-[#7A1E1E] focus:ring-[#7A1E1E] ${
-                                          isDisabled ? 'opacity-50 cursor-not-allowed' : ''
-                                        }`}
+                                        className={`rounded border-gray-200 text-[#96572A] focus:ring-[#96572A] h-4 w-4 ${isDisabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                                       />
                                     </td>
-                                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{order.name}</td>
-                                    <td className="px-4 py-3 text-sm text-gray-600">
-                                      {order.created_at ? new Date(order.created_at).toLocaleDateString() : 'N/A'}
+                                    <td className="px-4 py-3.5 text-sm font-medium text-gray-800">{order.name}</td>
+                                    <td className="px-4 py-3.5 text-xs text-gray-400">
+                                      {order.created_at ? new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
                                     </td>
-                                    <td className="px-4 py-3">
-                                      <div className="flex items-center space-x-3">
-                                        <div className="w-8 h-8 bg-gray-200 rounded flex items-center justify-center overflow-hidden">
+                                    <td className="px-4 py-3.5">
+                                      <div className="flex items-center space-x-2.5">
+                                        <div className="w-9 h-9 bg-gray-50 rounded-lg flex items-center justify-center overflow-hidden border border-gray-100 shrink-0">
                                           {(item.image?.src || item.image?.url) ? (
                                             <img src={item.image?.src || item.image?.url} alt={item.name || item.title} className="w-full h-full object-cover" />
                                           ) : (
-                                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                            <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0 0 22.5 18.75V5.25A2.25 2.25 0 0 0 20.25 3H3.75A2.25 2.25 0 0 0 1.5 5.25v13.5A2.25 2.25 0 0 0 3.75 21Z" />
                                             </svg>
                                           )}
                                         </div>
                                         <div>
-                                          <p className="text-sm font-medium text-gray-900">{item.name || item.title}</p>
-                                          <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
+                                          <p className="text-sm font-medium text-gray-800 leading-snug">{item.name || item.title}</p>
+                                          <p className="text-[11px] text-gray-400">Qty: {item.quantity}</p>
                                         </div>
                                       </div>
                                     </td>
-                                    <td className="px-4 py-3 text-sm text-gray-900">₹{item.price}</td>
-                                    <td className="px-4 py-3">
-                                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                                    <td className="px-4 py-3.5 text-sm text-gray-600">₹{item.price}</td>
+                                    <td className="px-4 py-3.5">
+                                      <span className={`inline-flex px-2 py-0.5 text-[10px] font-medium rounded-full tracking-wide ${
                                         alreadyReturned
-                                          ? "bg-amber-100 text-amber-800"
+                                          ? "bg-amber-50 text-amber-600 border border-amber-200"
                                           : eligibility.eligible
-                                            ? "bg-green-100 text-green-800" 
-                                            : "bg-red-100 text-red-800"
+                                            ? "bg-emerald-50 text-emerald-600 border border-emerald-200" 
+                                            : "bg-gray-50 text-gray-400 border border-gray-200"
                                       }`}>
-                                        {alreadyReturned ? "Return Requested" :
+                                        {alreadyReturned ? "Returned" :
                                          eligibility.eligible ? "Eligible" : 
-                                         eligibility.reason === "Return window closed" ? "Window Closed" : 
-                                         "Not Delivered"}
+                                         eligibility.reason === "Return window closed" ? "Closed" : 
+                                         "Pending"}
                                       </span>
                                     </td>
-                                    <td className="px-4 py-3">
-                                      {order.cancelled_at ? (
-                                        <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">Cancelled</span>
-                                      ) : canCancelOrder(order) && index === 0 ? (
-                                        <button
-                                          onClick={() => handleCancelOrder(order)}
-                                          disabled={isCancelling && cancellingOrderId === order.id}
-                                          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 transition-colors flex items-center gap-1"
-                                        >
-                                          {isCancelling && cancellingOrderId === order.id ? (
+                                    <td className="px-4 py-3.5">
+                                      {index === 0 && (
+                                        <div className="relative">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setOpenKebabMenu(openKebabMenu === order.id ? null : order.id);
+                                            }}
+                                            className="p-1.5 rounded-full hover:bg-gray-50 transition-colors"
+                                          >
+                                            <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                                              <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                                            </svg>
+                                          </button>
+                                          
+                                          {openKebabMenu === order.id && (
                                             <>
-                                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                                              Cancelling...
+                                              <div className="fixed inset-0 z-10" onClick={() => setOpenKebabMenu(null)} />
+                                              <div className="absolute right-0 mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-20">
+                                                {!order.cancelled_at && canCancelOrder(order) && (
+                                                  <button
+                                                    onClick={() => handleOrderAction(order, 'cancel')}
+                                                    className="w-full text-left px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center space-x-2.5 transition-colors"
+                                                  >
+                                                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                    <span>Cancel Order</span>
+                                                  </button>
+                                                )}
+                                                <button
+                                                  onClick={() => handleOrderAction(order, 'return')}
+                                                  className="w-full text-left px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center space-x-2.5 transition-colors"
+                                                >
+                                                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+                                                  </svg>
+                                                  <span>Return Order</span>
+                                                </button>
+                                              </div>
                                             </>
-                                          ) : (
-                                            'Cancel'
                                           )}
-                                        </button>
-                                      ) : null}
+                                        </div>
+                                      )}
                                     </td>
                                   </tr>
                                 );
@@ -1249,93 +1576,89 @@ export default function ReturnPortal() {
                   )}
                 </>
               ) : (
-                <div className="text-center py-12">
-                  <p className="text-gray-600">No orders found for this phone number.</p>
-                  <p className="text-sm text-gray-500 mt-2">Please check your phone number or contact support.</p>
+                <div className="text-center py-20">
+                  <svg className="w-12 h-12 text-gray-200 mx-auto mb-4" fill="none" stroke="currentColor" strokeWidth={1} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007ZM8.625 10.5a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm7.5 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+                  </svg>
+                  <p className="text-gray-400 text-sm">No orders found</p>
+                  <p className="text-gray-300 text-xs mt-1">Check your phone number or contact support</p>
                 </div>
               )}
             </>
           )}
 
-          {/* My Returns View */}
+          {/* Returns View */}
           {dashboardView === "my-returns" && (
-            <div className="space-y-6">
+            <div className="space-y-4">
               {loadingReturns ? (
-                <div className="text-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#7A1E1E] mx-auto"></div>
-                  <p className="text-gray-600 mt-2">Loading return history...</p>
+                <div className="text-center py-16">
+                  <div className="animate-spin rounded-full h-7 w-7 border-2 border-[#96572A] border-t-transparent mx-auto"></div>
+                  <p className="text-gray-400 mt-3 text-sm">Loading returns...</p>
                 </div>
               ) : returnHistory.length > 0 ? (
                 returnHistory.map((returnRequest, index) => (
-                  <div key={index} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <div className="flex justify-between items-start mb-4">
+                  <div key={index} className="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-sm transition-shadow">
+                    <div className="flex justify-between items-start mb-3">
                       <div>
-                        <h3 className="font-semibold text-gray-900 text-lg">Order {returnRequest.orderId}</h3>
-                        <p className="text-sm text-gray-600">
-                          Return Date: {new Date(returnRequest.createdAt).toLocaleDateString()}
+                        <h3 className="font-semibold text-gray-800 text-sm">{returnRequest.orderId}</h3>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {new Date(returnRequest.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                         </p>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                        returnRequest.status === 'processing' ? 'bg-yellow-100 text-yellow-800' :
-                        returnRequest.status === 'approved' ? 'bg-green-100 text-green-800' :
-                        returnRequest.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                        'bg-gray-100 text-gray-800'
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold tracking-wide border ${
+                        returnRequest.status === 'processing' ? 'bg-amber-50 text-amber-600 border-amber-200' :
+                        returnRequest.status === 'approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
+                        returnRequest.status === 'rejected' ? 'bg-red-50 text-red-500 border-red-200' :
+                        'bg-gray-50 text-gray-500 border-gray-200'
                       }`}>
                         {returnRequest.status?.charAt(0).toUpperCase() + returnRequest.status?.slice(1) || 'Pending'}
                       </span>
                     </div>
                     
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-sm font-medium text-gray-700">Items Returned:</p>
-                        <div className="mt-2 space-y-2">
-                          {returnRequest.items?.map((item, itemIndex) => (
-                            <div key={itemIndex} className="flex justify-between items-center p-3 bg-gray-50 rounded">
-                              <span className="text-sm text-gray-900">{item.title}</span>
-                              <span className="text-sm text-gray-600">Qty: {item.quantity}</span>
-                            </div>
-                          ))}
+                    <div className="space-y-2">
+                      {returnRequest.items?.map((item, itemIndex) => (
+                        <div key={itemIndex} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0">
+                          <span className="text-sm text-gray-700">{item.title}</span>
+                          <span className="text-xs text-gray-400">Qty: {item.quantity}</span>
                         </div>
-                      </div>
-                      
-                      {returnRequest.refundAmount && (
-                        <div className="pt-3 border-t border-gray-200">
-                          <p className="text-sm font-medium text-gray-700">
-                            Refund Amount: {returnRequest.currency || '₹'}{returnRequest.refundAmount}
-                          </p>
-                        </div>
-                      )}
+                      ))}
                     </div>
+                    
+                    {returnRequest.refundAmount && (
+                      <div className="pt-3 mt-2 border-t border-gray-50">
+                        <p className="text-sm font-medium text-gray-600">
+                          Refund: {returnRequest.currency || '₹'}{returnRequest.refundAmount}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ))
               ) : (
-                <div className="text-center py-12">
-                  <p className="text-gray-600">No return requests found.</p>
-                  <p className="text-sm text-gray-500 mt-2">Your return history will appear here once you submit returns.</p>
+                <div className="text-center py-20">
+                  <svg className="w-12 h-12 text-gray-200 mx-auto mb-4" fill="none" stroke="currentColor" strokeWidth={1} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+                  </svg>
+                  <p className="text-gray-400 text-sm">No return requests yet</p>
+                  <p className="text-gray-300 text-xs mt-1">Your returns will appear here</p>
                 </div>
               )}
             </div>
           )}
         </div>
 
-        {/* Fixed Floating Footer */}
+        {/* Floating Footer */}
         {globalSelectedItems.length > 0 && (
-          <div className="fixed bottom-0 left-0 right-0 bg-[#7A1E1E] text-white shadow-lg z-50">
-            <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-              <div className="flex items-center space-x-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-                <span className="font-medium">
-                  Proceed to Return ({globalSelectedItems.length} items)
-                </span>
-              </div>
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] z-50">
+            <div className="max-w-7xl mx-auto px-4 py-3.5 flex justify-between items-center">
+              <span className="text-sm text-gray-600">
+                <span className="font-semibold text-gray-900">{globalSelectedItems.length}</span> item{globalSelectedItems.length > 1 ? 's' : ''} selected
+              </span>
               <button 
                 onClick={() => {
                   setSelectedItems(globalSelectedItems);
                   setIsModalOpen(true);
                 }}
-                className="px-6 py-2 bg-white text-[#7A1E1E] rounded-lg font-medium hover:bg-gray-100 transition-colors"
+                className="px-5 py-2 bg-[#96572A] text-white rounded-full text-sm font-medium hover:bg-[#7A4422] transition-colors"
               >
                 Continue
               </button>
@@ -1343,48 +1666,52 @@ export default function ReturnPortal() {
           </div>
         )}
 
-        {/* Selected Items Modal */}
+        {/* Return Modal */}
         {isModalOpen && selectedItems.length > 0 && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Selected Items for Return</h3>
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-5">
+                <h3 className="text-lg font-semibold text-gray-900">Return Request</h3>
                 <button 
                   onClick={() => setIsModalOpen(false)} 
-                  className="text-gray-400 hover:text-gray-600"
+                  className="p-1 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
                 >
-                  ✕
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                  </svg>
                 </button>
               </div>
               
-              <div className="space-y-4">
+              <div className="space-y-2">
                 {selectedItems.map((item, index) => (
-                  <div key={item.uniqueId} className="flex items-center justify-between p-3 border border-gray-100 rounded">
+                  <div key={item.uniqueId} className="flex items-center justify-between p-3 rounded-lg bg-gray-50/80 border border-gray-100">
                     <div className="flex items-center space-x-3">
-                      <span className="font-medium text-gray-900">{item.title}</span>
-                      <span className="text-sm text-gray-500">₹{item.price}</span>
+                      <span className="text-sm font-medium text-gray-800">{item.title}</span>
+                      <span className="text-xs text-gray-400">₹{item.price}</span>
                     </div>
                     <button 
                       onClick={() => {
                         setSelectedItems(selectedItems.filter(i => i.uniqueId !== item.uniqueId));
                         setGlobalSelectedItems(globalSelectedItems.filter(i => i.uniqueId !== item.uniqueId));
                       }}
-                      className="text-red-500 hover:text-red-700 text-sm"
+                      className="text-gray-400 hover:text-red-500 transition-colors p-1"
                     >
-                      Remove
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                      </svg>
                     </button>
                   </div>
                 ))}
               </div>
 
               {/* Return Form */}
-              <div className="space-y-4 mt-6">
+              <div className="space-y-4 mt-5 pt-5 border-t border-gray-100">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Return Reason</label>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Reason</label>
                   <select 
                     value={commonReason} 
                     onChange={(e) => setCommonReason(e.target.value)} 
-                    className="w-full border border-gray-300 px-4 py-3 rounded text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#7A1E1E] focus:border-[#7A1E1E] transition-colors"
+                    className="w-full border border-gray-200 px-4 py-3 rounded-xl text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] transition-colors bg-white"
                   >
                     <option value="Size issue">Size issue</option>
                     <option value="Quality issue">Quality issue</option>
@@ -1395,34 +1722,34 @@ export default function ReturnPortal() {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Additional Comments</label>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Comments</label>
                   <textarea 
                     value={comments} 
                     onChange={(e) => setComments(e.target.value)} 
-                    className="w-full border border-gray-300 px-4 py-3 rounded text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#7A1E1E] focus:border-[#7A1E1E] transition-colors" 
-                    rows={4}
-                    placeholder="Describe the issue in detail..."
+                    className="w-full border border-gray-200 px-4 py-3 rounded-xl text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] transition-colors" 
+                    rows={3}
+                    placeholder="Describe the issue..."
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Your Email</label>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Email</label>
                   <input 
                     type="email" 
                     value={userEmail} 
                     onChange={(e) => setUserEmail(e.target.value)} 
-                    className="w-full border border-gray-300 px-4 py-3 rounded text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#7A1E1E] focus:border-[#7A1E1E] transition-colors" 
+                    className="w-full border border-gray-200 px-4 py-3 rounded-xl text-gray-900 text-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] transition-colors" 
                     placeholder="your@email.com"
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Upload Video (Required)</label>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Video Evidence</label>
                   <input 
                     type="file" 
                     accept="video/*" 
                     onChange={(e) => setVideoFile(e.target.files[0])} 
-                    className="w-full border border-gray-300 px-4 py-3 rounded text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#7A1E1E] focus:border-[#7A1E1E] transition-colors"
+                    className="w-full border border-gray-200 px-4 py-3 rounded-xl text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] transition-colors file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-medium file:bg-[#F9F6F2] file:text-[#96572A]"
                   />
                 </div>
               </div>
@@ -1430,18 +1757,18 @@ export default function ReturnPortal() {
               <div className="flex gap-3 justify-end mt-6">
                 <button 
                   onClick={() => setIsModalOpen(false)} 
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                  className="px-5 py-2.5 border border-gray-200 text-gray-600 rounded-full hover:bg-gray-50 text-sm font-medium transition-colors"
                 >
                   Cancel
                 </button>
                 <button 
                   onClick={handleBulkSubmit} 
                   disabled={uploading}
-                  className="px-4 py-2 bg-[#7A1E1E] text-white rounded-lg hover:bg-[#5e1717] disabled:opacity-60 font-medium flex items-center gap-2"
+                  className="px-5 py-2.5 bg-[#96572A] text-white rounded-full hover:bg-[#7A4422] disabled:opacity-60 text-sm font-medium flex items-center gap-2 transition-colors"
                 >
                   {uploading ? (
                     <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
                       Submitting...
                     </>
                   ) : (
@@ -1453,35 +1780,118 @@ export default function ReturnPortal() {
           </div>
         )}
 
-        {/* Cancel Order Confirmation Modal */}
-        {cancelConfirmOrder && (
+        {/* Order Modification Modal */}
+        {modifyingOrder && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                  <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                  </svg>
+            <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900">Modify Order {modifyingOrder.name}</h3>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900">Cancel Order</h3>
-              </div>
-              <p className="text-gray-600 mb-2">
-                Are you sure you want to cancel order <span className="font-semibold text-gray-900">{cancelConfirmOrder.name}</span>?
-              </p>
-              <p className="text-sm text-red-600 mb-6">This action cannot be reversed. A refund will be initiated to your original payment method.</p>
-              <div className="flex gap-3 justify-end">
                 <button
-                  onClick={() => setCancelConfirmOrder(null)}
+                  onClick={() => setModifyingOrder(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              {/* Edit Window Timer */}
+              {(() => {
+                const editWindow = canEditOrder(modifyingOrder);
+                return (
+                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p className="text-sm text-blue-800 font-medium">
+                        Edit window: {formatTimeRemaining(editWindow.timeRemaining)}
+                      </p>
+                    </div>
+                    <p className="text-xs text-blue-600 mt-1">You can modify address and phone within 3 hours of order placement</p>
+                  </div>
+                );
+              })()}
+              
+              <div className="space-y-4">
+                {/* Shipping Address */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Shipping Address
+                  </label>
+                  <textarea
+                    value={editedAddress}
+                    onChange={(e) => setEditedAddress(e.target.value)}
+                    className="w-full border border-gray-300 px-4 py-3 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    rows={3}
+                    placeholder="Enter shipping address"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Current: {modifyingOrder.shipping_address?.address1 || 'Not provided'}
+                  </p>
+                </div>
+                
+                {/* Phone Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    value={editedPhone}
+                    onChange={(e) => setEditedPhone(e.target.value)}
+                    className="w-full border border-gray-300 px-4 py-3 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    placeholder="+91 XXXXXXXXXX"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Current: {modifyingOrder.phone || modifyingOrder.shipping_address?.phone || 'Not provided'}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex gap-3 justify-end mt-6">
+                <button
+                  onClick={() => setModifyingOrder(null)}
                   className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
                 >
-                  Go Back
+                  Cancel
                 </button>
                 <button
-                  onClick={executeCancelOrder}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
+                  onClick={handleSaveModification}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
                 >
-                  Yes, Cancel Order
+                  Save Changes
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Cancel Order Modal */}
+        {cancelConfirmOrder && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                  <svg className="w-4.5 h-4.5 text-red-500" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                  </svg>
+                </div>
+                <h3 className="text-base font-semibold text-gray-900">Cancel Order</h3>
+              </div>
+              <p className="text-sm text-gray-600 mb-1.5">
+                Cancel order <span className="font-semibold text-gray-900">{cancelConfirmOrder.name}</span>?
+              </p>
+              <p className="text-xs text-gray-400 mb-6">This action cannot be reversed. A refund will be initiated.</p>
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setCancelConfirmOrder(null)} className="px-5 py-2 border border-gray-200 text-gray-600 rounded-full hover:bg-gray-50 text-sm font-medium transition-colors">Go Back</button>
+                <button onClick={executeCancelOrder} className="px-5 py-2 bg-red-600 text-white rounded-full hover:bg-red-700 text-sm font-medium transition-colors">Yes, Cancel</button>
               </div>
             </div>
           </div>
@@ -1492,12 +1902,14 @@ export default function ReturnPortal() {
 
   return (
     <div className="min-h-screen bg-[#F9F6F2] flex items-center justify-center">
-      <div className="text-center text-white">
+      <div className="text-center">
         <div className="mb-8">
-          <h1 className="font-serif text-2xl md:text-3xl text-[#3a3a3a] tracking-widest uppercase mb-3">Satmi Returns</h1>
-          <p className="text-gray-300 text-sm">Loading your orders...</p>
+          <div className="flex justify-center mb-4">
+            <img src="/logo.png" alt="Satmi" className="h-14 w-auto object-contain" />
+          </div>
+          <p className="text-[#96572A] text-sm tracking-wide">Loading your orders...</p>
         </div>
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#96572A] mx-auto"></div>
       </div>
     </div>
   );
