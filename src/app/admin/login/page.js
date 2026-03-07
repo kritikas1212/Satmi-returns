@@ -60,22 +60,24 @@ export default function AdminLoginPage() {
 
   if (authChecking) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#7A1E1E]" />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#FAFAF8]">
+        <img src="/logo.png" alt="Satmi" className="h-8 mb-4 opacity-60" />
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#96572A]/20 border-t-[#96572A]" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
-      <div className="w-full max-w-md bg-white rounded-xl shadow-lg border border-gray-200 p-8">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#FAFAF8] p-4">
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Satmi Support</h1>
-          <p className="text-sm text-gray-500 mt-1">Sign in to access the returns dashboard</p>
+          <img src="/logo.png" alt="Satmi" className="h-10 mx-auto mb-4" />
+          <h1 className="text-lg font-semibold text-gray-900">Support Dashboard</h1>
+          <p className="text-xs text-gray-400 mt-1">Sign in to manage returns</p>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="email" className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
               Email
             </label>
             <input
@@ -84,12 +86,12 @@ export default function AdminLoginPage() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:ring-2 focus:ring-[#7A1E1E] focus:border-[#7A1E1E] outline-none"
-              placeholder="support@satmi.in"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] transition-colors"
+              placeholder="your@email.com"
             />
           </div>
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="password" className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
               Password
             </label>
             <input
@@ -98,28 +100,28 @@ export default function AdminLoginPage() {
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:ring-2 focus:ring-[#7A1E1E] focus:border-[#7A1E1E] outline-none"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] transition-colors"
               placeholder="••••••••"
             />
           </div>
           {error && (
-            <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+            <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
               {error}
             </div>
           )}
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#7A1E1E] text-white py-2.5 rounded-lg font-semibold hover:bg-[#5e1717] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+            className="w-full bg-[#96572A] text-white py-2.5 rounded-full font-medium text-sm hover:bg-[#7A4623] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
-            {loading ? "Signing in…" : "Sign in"}
+            {loading ? "Signing in…" : "Sign In"}
           </button>
         </form>
-        <p className="mt-6 text-center text-xs text-gray-500">
-          Authorized support users only. Create accounts in Firebase Console (Authentication).
+        <p className="mt-6 text-center text-[10px] text-gray-400">
+          Authorized support users only
         </p>
-        <div className="mt-4 text-center">
-          <Link href="/" className="text-sm text-[#7A1E1E] hover:underline">
+        <div className="mt-3 text-center">
+          <Link href="/" className="text-xs text-[#96572A] hover:underline">
             ← Back to returns portal
           </Link>
         </div>

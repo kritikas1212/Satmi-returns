@@ -378,8 +378,11 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#7A1E1E]" />
+      <div className="min-h-screen flex items-center justify-center bg-[#FAFAF8]">
+        <div className="text-center">
+          <img src="/logo.png" alt="Satmi" className="h-10 w-auto object-contain mx-auto mb-4" />
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#96572A] border-t-transparent mx-auto" />
+        </div>
       </div>
     );
   }
@@ -389,40 +392,52 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
+    <div className="min-h-screen bg-[#FAFAF8]">
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-4">
-              <h1 className="text-xl font-bold text-gray-900">Satmi Returns Dashboard</h1>
-              <div className="flex items-center gap-2">
+          <div className="flex justify-between items-center h-14">
+            <div className="flex items-center gap-5">
+              <div className="flex items-center gap-3">
+                <img src="/logo.png" alt="Satmi" className="h-8 w-auto object-contain" />
+                <h1 className="text-sm font-semibold text-gray-800 tracking-wide">Returns Dashboard</h1>
+              </div>
+              <div className="flex items-center bg-gray-50 rounded-full p-0.5 border border-gray-100">
                 <button
                   onClick={() => setViewMode("cards")}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  className={`p-2 rounded-full transition-all ${
                     viewMode === "cards"
-                      ? "bg-[#7A1E1E] text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      ? "bg-white text-[#96572A] shadow-sm"
+                      : "text-gray-400 hover:text-gray-600"
                   }`}
+                  title="Card View"
                 >
-                  Cards
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                    <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                    <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                    <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                    <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                  </svg>
                 </button>
                 <button
                   onClick={() => setViewMode("table")}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  className={`p-2 rounded-full transition-all ${
                     viewMode === "table"
-                      ? "bg-[#7A1E1E] text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      ? "bg-white text-[#96572A] shadow-sm"
+                      : "text-gray-400 hover:text-gray-600"
                   }`}
+                  title="Table View"
                 >
-                  Table
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" d="M3 6h18M3 12h18M3 18h18" />
+                  </svg>
                 </button>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-500">{user.email}</span>
+              <span className="text-xs text-gray-400">{user.email}</span>
               <button
                 onClick={handleLogout}
-                className="text-sm font-medium text-[#7A1E1E] hover:underline"
+                className="text-xs font-medium text-red-600 hover:text-red-700 transition-colors"
               >
                 Logout
               </button>
@@ -430,18 +445,17 @@ export default function AdminDashboard() {
           </div>
           
           {/* Filters and Search Bar */}
-          <div className="pb-4 space-y-4">
+          <div className="pb-3 space-y-3">
             {/* Status Filters */}
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-gray-700">Status:</span>
+            <div className="flex flex-wrap items-center gap-1.5">
               {STATUS_FILTERS.map((s) => (
                 <button
                   key={s}
                   onClick={() => setStatusFilter(s)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                     statusFilter === s
-                      ? "bg-[#7A1E1E] text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      ? "bg-[#96572A] text-white shadow-sm"
+                      : "bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-100"
                   }`}
                 >
                   {s}
@@ -450,20 +464,20 @@ export default function AdminDashboard() {
             </div>
             
             {/* Search and Date Filters */}
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-2">
               <div className="flex-1 min-w-64">
                 <input
                   type="text"
-                  placeholder="Search by Order ID, Customer Name, Email, Phone..."
+                  placeholder="Search by Order ID, Name, Email, Phone…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#7A1E1E] focus:border-transparent"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] focus:outline-none transition-colors"
                 />
               </div>
               <select
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#7A1E1E] focus:border-transparent"
+                className="px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] focus:outline-none transition-colors text-gray-700"
               >
                 <option value="all">All Time</option>
                 <option value="7days">Last 7 Days</option>
@@ -472,7 +486,7 @@ export default function AdminDashboard() {
               </select>
               <button
                 onClick={handleExport}
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium text-sm"
+                className="px-4 py-2.5 bg-gray-50 text-gray-600 rounded-xl hover:bg-gray-100 font-medium text-xs border border-gray-100 transition-colors"
               >
                 Export CSV
               </button>
@@ -480,29 +494,29 @@ export default function AdminDashboard() {
             
             {/* Bulk Actions */}
             {selectedReturns.size > 0 && (
-              <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
-                <span className="text-sm font-medium text-blue-900">
+              <div className="flex items-center gap-2 p-3 bg-[#F9F6F2] rounded-xl border border-[#C8956C]/20">
+                <span className="text-xs font-semibold text-[#96572A]">
                   {selectedReturns.size} selected
                 </span>
                 <button
                   onClick={handleBulkApprove}
                   disabled={processingId === 'bulk'}
-                  className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-60 text-sm font-medium"
+                  className="px-3 py-1.5 bg-emerald-600 text-white rounded-full hover:bg-emerald-700 disabled:opacity-60 text-xs font-medium transition-colors"
                 >
-                  {processingId === 'bulk' ? 'Processing...' : 'Bulk Approve'}
+                  {processingId === 'bulk' ? 'Processing…' : 'Bulk Approve'}
                 </button>
                 <button
                   onClick={handleBulkReject}
                   disabled={processingId === 'bulk'}
-                  className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60 text-sm font-medium"
+                  className="px-3 py-1.5 bg-red-600 text-white rounded-full hover:bg-red-700 disabled:opacity-60 text-xs font-medium transition-colors"
                 >
                   Bulk Reject
                 </button>
                 <button
                   onClick={() => setSelectedReturns(new Set())}
-                  className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm font-medium"
+                  className="px-3 py-1.5 bg-white text-gray-600 rounded-full hover:bg-gray-50 text-xs font-medium border border-gray-200 transition-colors"
                 >
-                  Clear Selection
+                  Clear
                 </button>
               </div>
             )}
@@ -511,78 +525,78 @@ export default function AdminDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-sm text-gray-500">Pending</p>
-            <p className="text-2xl font-bold text-amber-600">{stats.pending}</p>
-            <p className="text-xs text-gray-400 mt-1">Awaiting review</p>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+          <div className="bg-white rounded-xl border border-gray-100 p-4">
+            <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Pending</p>
+            <p className="text-2xl font-bold text-amber-600 mt-1">{stats.pending}</p>
+            <p className="text-[10px] text-gray-300 mt-0.5">Awaiting review</p>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-sm text-gray-500">Approved</p>
-            <p className="text-2xl font-bold text-green-600">{stats.approved}</p>
-            <p className="text-xs text-gray-400 mt-1">Processed returns</p>
+          <div className="bg-white rounded-xl border border-gray-100 p-4">
+            <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Approved</p>
+            <p className="text-2xl font-bold text-emerald-600 mt-1">{stats.approved}</p>
+            <p className="text-[10px] text-gray-300 mt-0.5">Processed</p>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-sm text-gray-500">Rejected</p>
-            <p className="text-2xl font-bold text-red-600">{stats.rejected}</p>
-            <p className="text-xs text-gray-400 mt-1">Declined requests</p>
+          <div className="bg-white rounded-xl border border-gray-100 p-4">
+            <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Rejected</p>
+            <p className="text-2xl font-bold text-red-500 mt-1">{stats.rejected}</p>
+            <p className="text-[10px] text-gray-300 mt-0.5">Declined</p>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-sm text-gray-500">This Month</p>
-            <p className="text-2xl font-bold text-blue-600">{stats.thisMonth}</p>
-            <p className="text-xs text-gray-400 mt-1">New returns</p>
+          <div className="bg-white rounded-xl border border-gray-100 p-4">
+            <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">This Month</p>
+            <p className="text-2xl font-bold text-[#96572A] mt-1">{stats.thisMonth}</p>
+            <p className="text-[10px] text-gray-300 mt-0.5">New returns</p>
           </div>
         </div>
         
         {/* Financial Analytics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-sm text-gray-500">Total Refunds</p>
-            <p className="text-2xl font-bold text-purple-600">₹{stats.totalRefunds.toFixed(2)}</p>
-            <p className="text-xs text-gray-400 mt-1">Total refund amount</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+          <div className="bg-white rounded-xl border border-gray-100 p-4">
+            <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Total Refunds</p>
+            <p className="text-2xl font-bold text-purple-600 mt-1">₹{stats.totalRefunds.toFixed(2)}</p>
+            <p className="text-[10px] text-gray-300 mt-0.5">All time</p>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-sm text-gray-500">Average Refund</p>
-            <p className="text-2xl font-bold text-indigo-600">₹{stats.avgRefundAmount.toFixed(2)}</p>
-            <p className="text-xs text-gray-400 mt-1">Per return average</p>
+          <div className="bg-white rounded-xl border border-gray-100 p-4">
+            <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Average Refund</p>
+            <p className="text-2xl font-bold text-indigo-600 mt-1">₹{stats.avgRefundAmount.toFixed(2)}</p>
+            <p className="text-[10px] text-gray-300 mt-0.5">Per return</p>
           </div>
         </div>
         
         {/* Analytics Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
           {/* Top Return Reasons */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Return Reasons</h3>
-            <div className="space-y-3">
+          <div className="bg-white rounded-xl border border-gray-100 p-5">
+            <h3 className="text-sm font-semibold text-gray-800 mb-4">Top Return Reasons</h3>
+            <div className="space-y-2.5">
               {topReturnReasons.length > 0 ? (
                 topReturnReasons.map(([reason, count], index) => (
                   <div key={reason} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium text-gray-500 w-6">#{index + 1}</span>
-                      <span className="text-sm text-gray-900">{reason}</span>
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-[10px] font-medium text-gray-400 w-5">#{index + 1}</span>
+                      <span className="text-xs text-gray-700">{reason}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="w-20 bg-gray-200 rounded-full h-2">
+                      <div className="w-20 bg-gray-100 rounded-full h-1.5">
                         <div 
-                          className="bg-[#7A1E1E] h-2 rounded-full"
+                          className="bg-[#96572A] h-1.5 rounded-full"
                           style={{ width: `${(count / returns.length) * 100}%` }}
                         />
                       </div>
-                      <span className="text-sm font-medium text-gray-700 w-8 text-right">{count}</span>
+                      <span className="text-xs font-medium text-gray-500 w-6 text-right">{count}</span>
                     </div>
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-gray-500">No data available</p>
+                <p className="text-xs text-gray-400">No data available</p>
               )}
             </div>
           </div>
           
           {/* Monthly Trends */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Returns Trend</h3>
-            <div className="space-y-3">
+          <div className="bg-white rounded-xl border border-gray-100 p-5">
+            <h3 className="text-sm font-semibold text-gray-800 mb-4">Monthly Trend</h3>
+            <div className="space-y-2.5">
               {Object.entries(monthlyReturns).length > 0 ? (
                 Object.entries(monthlyReturns)
                   .sort(([a], [b]) => b.localeCompare(a))
@@ -594,35 +608,38 @@ export default function AdminDashboard() {
                     
                     return (
                       <div key={month} className="flex items-center justify-between">
-                        <span className="text-sm text-gray-900">{monthName}</span>
-                        <div className="flex items-center gap-2">
-                          <div className="w-24 bg-gray-200 rounded-full h-2">
+                        <span className="text-xs text-gray-700 w-24">{monthName}</span>
+                        <div className="flex items-center gap-2 flex-1 ml-2">
+                          <div className="flex-1 bg-gray-100 rounded-full h-1.5">
                             <div 
-                              className="bg-blue-600 h-2 rounded-full"
+                              className="bg-[#C8956C] h-1.5 rounded-full"
                               style={{ width: `${(count / maxCount) * 100}%` }}
                             />
                           </div>
-                          <span className="text-sm font-medium text-gray-700 w-8 text-right">{count}</span>
+                          <span className="text-xs font-medium text-gray-500 w-6 text-right">{count}</span>
                         </div>
                       </div>
                     );
                   })
               ) : (
-                <p className="text-sm text-gray-500">No data available</p>
+                <p className="text-xs text-gray-400">No data available</p>
               )}
             </div>
           </div>
         </div>
 
         {filteredReturns.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500">
-            No return requests {statusFilter !== "All" ? `with status "${statusFilter}"` : ""}.
+          <div className="bg-white rounded-xl border border-gray-100 p-12 text-center">
+            <svg className="w-10 h-10 text-gray-200 mx-auto mb-3" fill="none" stroke="currentColor" strokeWidth={1} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+            </svg>
+            <p className="text-gray-400 text-sm">No return requests {statusFilter !== "All" ? `with status "${statusFilter}"` : ""}</p>
           </div>
         ) : (
           <>
             {/* Card View */}
             {viewMode === "cards" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredReturns.map((req) => {
                   const status = req.status || "Pending";
                   const isSelected = selectedReturns.has(req.id);
@@ -630,14 +647,14 @@ export default function AdminDashboard() {
                   return (
                     <div 
                       key={req.id} 
-                      className={`bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow ${
-                        isSelected ? "ring-2 ring-blue-500" : ""
+                      className={`bg-white rounded-xl border overflow-hidden hover:shadow-md transition-all ${
+                        isSelected ? "ring-2 ring-[#96572A] border-[#C8956C]/30" : "border-gray-100"
                       }`}
                     >
                       {/* Card Header */}
-                      <div className="p-4 border-b border-gray-100">
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center gap-3">
+                      <div className="px-4 py-3.5 border-b border-gray-50">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2.5">
                             <input
                               type="checkbox"
                               checked={isSelected}
@@ -650,20 +667,20 @@ export default function AdminDashboard() {
                                 }
                                 setSelectedReturns(newSelected);
                               }}
-                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              className="rounded border-gray-200 text-[#96572A] focus:ring-[#96572A] h-4 w-4"
                             />
                             <div>
-                              <div className="font-semibold text-gray-900">{req.orderId}</div>
-                              <div className="text-sm text-gray-500">{req.customerName}</div>
+                              <div className="font-semibold text-gray-800 text-sm">{req.orderId}</div>
+                              <div className="text-xs text-gray-400">{req.customerName}</div>
                             </div>
                           </div>
                           <span
-                            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            className={`inline-flex px-2 py-0.5 text-[10px] font-semibold rounded-full tracking-wide border ${
                               status === "Approved"
-                                ? "bg-green-100 text-green-800"
+                                ? "bg-emerald-50 text-emerald-600 border-emerald-200"
                                 : status === "Rejected"
-                                ? "bg-red-100 text-red-800"
-                                : "bg-amber-100 text-amber-800"
+                                ? "bg-red-50 text-red-500 border-red-200"
+                                : "bg-amber-50 text-amber-600 border-amber-200"
                             }`}
                           >
                             {status}
@@ -671,32 +688,24 @@ export default function AdminDashboard() {
                         </div>
                         
                         {/* Customer Info */}
-                        <div className="space-y-1 text-sm">
-                          <div className="text-gray-600">
-                            <span className="font-medium">Email:</span> {req.email}
-                          </div>
-                          <div className="text-gray-600">
-                            <span className="font-medium">Phone:</span> {req.phone}
-                          </div>
+                        <div className="space-y-0.5 text-xs">
+                          <div className="text-gray-500 truncate">{req.email}</div>
+                          <div className="text-gray-400">{req.phone}</div>
                         </div>
                       </div>
                       
                       {/* Card Body */}
-                      <div className="p-4 space-y-4">
+                      <div className="px-4 py-3.5 space-y-3">
                         {/* Return Details */}
                         <div>
-                          <h4 className="text-sm font-medium text-gray-900 mb-2">Return Details</h4>
-                          <div className="space-y-1 text-sm">
-                            <div className="text-gray-600">
-                              <span className="font-medium">Reason:</span> {req.reason}
-                            </div>
+                          <h4 className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-1.5">Return Details</h4>
+                          <div className="space-y-1 text-xs">
+                            <div className="text-gray-600">{req.reason}</div>
                             {req.comments && (
-                              <div className="text-gray-600">
-                                <span className="font-medium">Comments:</span> {req.comments}
-                              </div>
+                              <div className="text-gray-400 italic">{req.comments}</div>
                             )}
                             {req.shopifyOrderData?.refundAmount && (
-                              <div className="text-green-600 font-medium">
+                              <div className="text-emerald-600 font-medium">
                                 Refund: {req.shopifyOrderData.currency || "INR"} {parseFloat(req.shopifyOrderData.refundAmount).toFixed(2)}
                               </div>
                             )}
@@ -705,11 +714,11 @@ export default function AdminDashboard() {
                         
                         {/* Warehouse Address */}
                         <div>
-                          <h4 className="text-sm font-medium text-gray-900 mb-2">Warehouse Address</h4>
-                          <div className="text-sm text-gray-600">
+                          <h4 className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-1.5">Warehouse</h4>
+                          <div className="text-xs text-gray-500">
                             <div>{req.warehouseAddress?.shipping_address || "Plot No 519, Roja Yaqubpur, Sec 16B"}</div>
                             <div>
-                              {req.warehouseAddress?.shipping_city || "Greater Noida"}, {req.warehouseAddress?.shipping_state || "Uttar Pradesh"} {req.warehouseAddress?.shipping_pincode || "201306"}
+                              {req.warehouseAddress?.shipping_city || "Greater Noida"}, {req.warehouseAddress?.shipping_state || "UP"} {req.warehouseAddress?.shipping_pincode || "201306"}
                             </div>
                           </div>
                           <button
@@ -723,27 +732,27 @@ export default function AdminDashboard() {
                               shipping_pincode: "201306",
                               shipping_phone: "9999999999"
                             }})}
-                            className="text-xs text-blue-600 hover:text-blue-800 underline mt-1"
+                            className="text-[10px] text-[#96572A] hover:text-[#7A4422] underline mt-1"
                           >
                             Edit Address
                           </button>
                         </div>
                         
                         {/* Actions */}
-                        <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-100">
+                        <div className="flex flex-wrap gap-1.5 pt-3 border-t border-gray-50">
                           {status === "Pending" && (
                             <>
                               <button
                                 onClick={() => setApproveModal({ open: true, request: req })}
                                 disabled={processingId === req.id}
-                                className="px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-60"
+                                className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-medium rounded-full hover:bg-emerald-700 disabled:opacity-60 transition-colors"
                               >
                                 {processingId === req.id ? "Processing…" : "Approve"}
                               </button>
                               <button
                                 onClick={() => setRejectModal({ open: true, request: req, reason: "" })}
                                 disabled={processingId === req.id}
-                                className="px-3 py-1.5 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-60"
+                                className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-full hover:bg-red-700 disabled:opacity-60 transition-colors"
                               >
                                 Reject
                               </button>
@@ -753,7 +762,7 @@ export default function AdminDashboard() {
                             <button
                               onClick={() => handleGenerateLabel(req)}
                               disabled={labelLoadingId === req.id}
-                              className="px-3 py-1.5 bg-[#7A1E1E] text-white text-sm font-medium rounded-lg hover:bg-[#5e1717] disabled:opacity-60"
+                              className="px-3 py-1.5 bg-[#96572A] text-white text-xs font-medium rounded-full hover:bg-[#7A4422] disabled:opacity-60 transition-colors"
                             >
                               {labelLoadingId === req.id
                                 ? "Generating…"
@@ -767,7 +776,7 @@ export default function AdminDashboard() {
                               href={req.labelUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="px-3 py-1.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200"
+                              className="px-3 py-1.5 bg-gray-50 text-gray-600 text-xs font-medium rounded-full hover:bg-gray-100 border border-gray-100 transition-colors"
                             >
                               Download
                             </a>
@@ -777,7 +786,7 @@ export default function AdminDashboard() {
                               href={req.videoUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="px-3 py-1.5 text-[#7A1E1E] hover:underline text-sm font-medium"
+                              className="px-3 py-1.5 text-[#96572A] hover:underline text-xs font-medium"
                             >
                               Video
                             </a>
@@ -792,11 +801,11 @@ export default function AdminDashboard() {
             
             {/* Table View */}
             {viewMode === "table" && (
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
+                  <table className="min-w-full">
+                    <thead>
+                      <tr className="border-b border-gray-100">
                         <th className="px-4 py-3 text-left">
                           <input
                             type="checkbox"
@@ -808,22 +817,22 @@ export default function AdminDashboard() {
                                 setSelectedReturns(new Set());
                               }
                             }}
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            className="rounded border-gray-200 text-[#96572A] focus:ring-[#96572A] h-4 w-4"
                           />
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order / Customer</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items & Reason</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Warehouse Address</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Video</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Order / Customer</th>
+                        <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Items & Reason</th>
+                        <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Warehouse</th>
+                        <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Video</th>
+                        <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200">
+                    <tbody>
                       {filteredReturns.map((req) => {
                         const status = req.status || "Pending";
                         return (
-                          <tr key={req.id} className="hover:bg-gray-50/50">
+                          <tr key={req.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/30 transition-colors">
                             <td className="px-4 py-3">
                               <input
                                 type="checkbox"
@@ -837,59 +846,59 @@ export default function AdminDashboard() {
                                   }
                                   setSelectedReturns(newSelected);
                                 }}
-                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                className="rounded border-gray-200 text-[#96572A] focus:ring-[#96572A] h-4 w-4"
                               />
                             </td>
                             <td className="px-4 py-3">
-                              <div className="font-medium text-gray-900">{req.orderId}</div>
-                              <div className="text-sm text-gray-500">{req.customerName}</div>
-                              <div className="text-xs text-gray-400">{req.email}</div>
-                              <div className="text-xs text-gray-400">{req.phone}</div>
+                              <div className="font-medium text-gray-800 text-sm">{req.orderId}</div>
+                              <div className="text-xs text-gray-400">{req.customerName}</div>
+                              <div className="text-[10px] text-gray-300">{req.email}</div>
+                              <div className="text-[10px] text-gray-300">{req.phone}</div>
                               {req.pincode && (
-                                <div className="text-xs text-gray-400">Pincode: {req.pincode}</div>
+                                <div className="text-[10px] text-gray-300">PIN: {req.pincode}</div>
                               )}
                             </td>
                             <td className="px-4 py-3">
-                              <div className="text-sm text-gray-700">
+                              <div className="text-xs text-gray-600">
                                 {req.items?.map((item, i) => (
                                   <div key={i}>• {item.title}</div>
                                 ))}
                               </div>
-                              <div className="text-xs text-gray-500 mt-1">{req.reason}</div>
+                              <div className="text-[10px] text-gray-400 mt-1">{req.reason}</div>
                               {req.comments && (
-                                <div className="text-xs text-gray-400 mt-0.5">{req.comments}</div>
+                                <div className="text-[10px] text-gray-300 mt-0.5 italic">{req.comments}</div>
                               )}
                               {req.shopifyOrderData?.refundAmount && (
-                                <div className="text-xs text-green-600 mt-1 font-medium">
+                                <div className="text-[10px] text-emerald-600 mt-1 font-medium">
                                   Refund: {req.shopifyOrderData.currency || "INR"} {parseFloat(req.shopifyOrderData.refundAmount).toFixed(2)}
                                 </div>
                               )}
                             </td>
                             <td className="px-4 py-3">
                               <span
-                                className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                className={`inline-flex px-2 py-0.5 text-[10px] font-semibold rounded-full tracking-wide border ${
                                   status === "Approved"
-                                    ? "bg-green-100 text-green-800"
+                                    ? "bg-emerald-50 text-emerald-600 border-emerald-200"
                                     : status === "Rejected"
-                                    ? "bg-red-100 text-red-800"
-                                    : "bg-amber-100 text-amber-800"
+                                    ? "bg-red-50 text-red-500 border-red-200"
+                                    : "bg-amber-50 text-amber-600 border-amber-200"
                                 }`}
                               >
                                 {status}
                               </span>
                               {req.shiprocketAwb && (
-                                <div className="text-xs text-gray-500 mt-1">AWB: {req.shiprocketAwb}</div>
+                                <div className="text-[10px] text-gray-400 mt-1">AWB: {req.shiprocketAwb}</div>
                               )}
                               {req.rejectionReason && (
-                                <div className="text-xs text-red-600 mt-1">{req.rejectionReason}</div>
+                                <div className="text-[10px] text-red-500 mt-1">{req.rejectionReason}</div>
                               )}
                             </td>
                             <td className="px-4 py-3">
-                              <div className="text-sm text-gray-900">
+                              <div className="text-xs text-gray-600">
                                 {req.warehouseAddress?.shipping_address || "Plot No 519, Roja Yaqubpur, Sec 16B"}
                               </div>
-                              <div className="text-xs text-gray-500">
-                                {req.warehouseAddress?.shipping_city || "Greater Noida"}, {req.warehouseAddress?.shipping_state || "Uttar Pradesh"} {req.warehouseAddress?.shipping_pincode || "201306"}
+                              <div className="text-[10px] text-gray-400">
+                                {req.warehouseAddress?.shipping_city || "Greater Noida"}, {req.warehouseAddress?.shipping_state || "UP"} {req.warehouseAddress?.shipping_pincode || "201306"}
                               </div>
                               <button
                                 onClick={() => setWarehouseModal({ open: true, request: req, address: req.warehouseAddress || {
@@ -902,7 +911,7 @@ export default function AdminDashboard() {
                                   shipping_pincode: "201306",
                                   shipping_phone: "9999999999"
                                 }})}
-                                className="text-xs text-blue-600 hover:text-blue-800 underline mt-1"
+                                className="text-[10px] text-[#96572A] hover:text-[#7A4422] underline mt-1"
                               >
                                 Edit Address
                               </button>
@@ -913,29 +922,29 @@ export default function AdminDashboard() {
                                   href={req.videoUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-sm text-[#7A1E1E] hover:underline"
+                                  className="text-xs text-[#96572A] hover:underline"
                                 >
-                                  View video
+                                  View
                                 </a>
                               ) : (
-                                <span className="text-gray-400 text-sm">—</span>
+                                <span className="text-gray-300 text-xs">—</span>
                               )}
                             </td>
                             <td className="px-4 py-3">
-                              <div className="flex flex-wrap gap-2">
+                              <div className="flex flex-wrap gap-1.5">
                                 {status === "Pending" && (
                                   <>
                                     <button
                                       onClick={() => setApproveModal({ open: true, request: req })}
                                       disabled={processingId === req.id}
-                                      className="px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-60"
+                                      className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-medium rounded-full hover:bg-emerald-700 disabled:opacity-60 transition-colors"
                                     >
                                       {processingId === req.id ? "Processing…" : "Approve"}
                                     </button>
                                     <button
                                       onClick={() => setRejectModal({ open: true, request: req, reason: "" })}
                                       disabled={processingId === req.id}
-                                      className="px-3 py-1.5 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-60"
+                                      className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-full hover:bg-red-700 disabled:opacity-60 transition-colors"
                                     >
                                       Reject
                                     </button>
@@ -945,7 +954,7 @@ export default function AdminDashboard() {
                                   <button
                                     onClick={() => handleGenerateLabel(req)}
                                     disabled={labelLoadingId === req.id}
-                                    className="px-3 py-1.5 bg-[#7A1E1E] text-white text-sm font-medium rounded-lg hover:bg-[#5e1717] disabled:opacity-60"
+                                    className="px-3 py-1.5 bg-[#96572A] text-white text-xs font-medium rounded-full hover:bg-[#7A4422] disabled:opacity-60 transition-colors"
                                   >
                                     {labelLoadingId === req.id
                                       ? "Generating…"
@@ -959,9 +968,9 @@ export default function AdminDashboard() {
                                     href={req.labelUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="px-3 py-1.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200"
+                                    className="px-3 py-1.5 bg-gray-50 text-gray-600 text-xs font-medium rounded-full hover:bg-gray-100 border border-gray-100 transition-colors"
                                   >
-                                    Download label
+                                    Download
                                   </a>
                                 )}
                               </div>
@@ -978,28 +987,34 @@ export default function AdminDashboard() {
         )}
       </main>
 
-      {/* Approve modal: confirm and optional pickup pincode */}
+      {/* Approve modal */}
       {approveModal.open && approveModal.request && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">Approve return</h2>
-            <p className="text-sm text-gray-600 mb-4">
-              Create RTO, generate label, and email the customer for order <strong>{approveModal.request.orderId}</strong>.
-              Pickup address is taken from Shopify; label is sent to {approveModal.request.email}.
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
+                <svg className="w-4.5 h-4.5 text-emerald-600" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+              </div>
+              <h2 className="text-base font-semibold text-gray-900">Approve Return</h2>
+            </div>
+            <p className="text-xs text-gray-500 mb-5">
+              This will create an RTO, generate a label, and email the customer for order <strong className="text-gray-700">{approveModal.request.orderId}</strong>.
             </p>
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => setApproveModal({ open: false, request: null })}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                className="px-5 py-2 border border-gray-200 text-gray-600 rounded-full hover:bg-gray-50 text-sm font-medium transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleApprove(approveModal.request)}
                 disabled={processingId === approveModal.request.id}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-60"
+                className="px-5 py-2 bg-emerald-600 text-white rounded-full hover:bg-emerald-700 disabled:opacity-60 text-sm font-medium transition-colors"
               >
-                {processingId === approveModal.request.id ? "Processing…" : "Approve & create RTO"}
+                {processingId === approveModal.request.id ? "Processing…" : "Approve & Create RTO"}
               </button>
             </div>
           </div>
@@ -1008,37 +1023,39 @@ export default function AdminDashboard() {
 
       {/* Reject modal */}
       {rejectModal.open && rejectModal.request && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">Reject return</h2>
-            <p className="text-sm text-gray-600 mb-4">
-              Reject return request for order <strong>{rejectModal.request.orderId}</strong>.
-              Optionally add a reason (e.g. for internal use or future communication).
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                <svg className="w-4.5 h-4.5 text-red-500" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+              <h2 className="text-base font-semibold text-gray-900">Reject Return</h2>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">
+              Reject return for order <strong className="text-gray-700">{rejectModal.request.orderId}</strong>.
             </p>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Reason (optional)
-              </label>
+            <div className="mb-5">
+              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Reason (optional)</label>
               <textarea
                 value={rejectModal.reason}
-                onChange={(e) =>
-                  setRejectModal((m) => ({ ...m, reason: e.target.value }))
-                }
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 min-h-[80px]"
+                onChange={(e) => setRejectModal((m) => ({ ...m, reason: e.target.value }))}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-gray-900 text-sm min-h-20 focus:outline-none focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] transition-colors"
                 placeholder="e.g. Outside return window"
               />
             </div>
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => setRejectModal({ open: false, request: null, reason: "" })}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                className="px-5 py-2 border border-gray-200 text-gray-600 rounded-full hover:bg-gray-50 text-sm font-medium transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleReject(rejectModal.request, rejectModal.reason)}
                 disabled={processingId === rejectModal.request.id}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60"
+                className="px-5 py-2 bg-red-600 text-white rounded-full hover:bg-red-700 disabled:opacity-60 text-sm font-medium transition-colors"
               >
                 {processingId === rejectModal.request.id ? "Rejecting…" : "Reject"}
               </button>
@@ -1049,84 +1066,90 @@ export default function AdminDashboard() {
 
       {/* Warehouse Address Edit Modal */}
       {warehouseModal.open && warehouseModal.request && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Edit Warehouse Address</h2>
-            <p className="text-sm text-gray-600 mb-4">
-              Update warehouse address for order <strong>{warehouseModal.request.orderId}</strong>.
-              This will be used when creating the return shipment.
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-full bg-[#96572A]/10 flex items-center justify-center shrink-0">
+                <svg className="w-4.5 h-4.5 text-[#96572A]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008Zm0 3h.008v.008h-.008v-.008Zm0 3h.008v.008h-.008v-.008Z" />
+                </svg>
+              </div>
+              <h2 className="text-base font-semibold text-gray-900">Edit Warehouse Address</h2>
+            </div>
+            <p className="text-xs text-gray-500 mb-5">
+              Update warehouse address for order <strong className="text-gray-700">{warehouseModal.request.orderId}</strong>. Used when creating the return shipment.
             </p>
-            <div className="space-y-4">
+            <div className="space-y-3.5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Warehouse Name</label>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Warehouse Name</label>
                 <input
                   type="text"
                   value={warehouseModal.address.shipping_customer_name || ""}
                   onChange={(e) => setWarehouseModal(m => ({ ...m, address: { ...m.address, shipping_customer_name: e.target.value } }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] transition-colors"
                   placeholder="Satmi Warehouse"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 1</label>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Address Line 1</label>
                 <input
                   type="text"
                   value={warehouseModal.address.shipping_address || ""}
                   onChange={(e) => setWarehouseModal(m => ({ ...m, address: { ...m.address, shipping_address: e.target.value } }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] transition-colors"
                   placeholder="Plot No 519, Roja Yaqubpur, Sec 16B"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 2</label>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Address Line 2</label>
                 <input
                   type="text"
                   value={warehouseModal.address.shipping_address_2 || ""}
                   onChange={(e) => setWarehouseModal(m => ({ ...m, address: { ...m.address, shipping_address_2: e.target.value } }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] transition-colors"
                   placeholder="Greater Noida"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">City</label>
                   <input
                     type="text"
                     value={warehouseModal.address.shipping_city || ""}
                     onChange={(e) => setWarehouseModal(m => ({ ...m, address: { ...m.address, shipping_city: e.target.value } }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] transition-colors"
                     placeholder="Greater Noida"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">State</label>
                   <input
                     type="text"
                     value={warehouseModal.address.shipping_state || ""}
                     onChange={(e) => setWarehouseModal(m => ({ ...m, address: { ...m.address, shipping_state: e.target.value } }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] transition-colors"
                     placeholder="Uttar Pradesh"
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Pincode</label>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Pincode</label>
                   <input
                     type="text"
                     value={warehouseModal.address.shipping_pincode || ""}
                     onChange={(e) => setWarehouseModal(m => ({ ...m, address: { ...m.address, shipping_pincode: e.target.value } }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] transition-colors"
                     placeholder="201318"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Phone</label>
                   <input
                     type="text"
                     value={warehouseModal.address.shipping_phone || ""}
                     onChange={(e) => setWarehouseModal(m => ({ ...m, address: { ...m.address, shipping_phone: e.target.value } }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] transition-colors"
                     placeholder="9999999999"
                   />
                 </div>
@@ -1135,14 +1158,14 @@ export default function AdminDashboard() {
             <div className="flex gap-3 justify-end mt-6">
               <button
                 onClick={() => setWarehouseModal({ open: false, request: null, address: null })}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                className="px-5 py-2 border border-gray-200 text-gray-600 rounded-full hover:bg-gray-50 text-sm font-medium transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleUpdateWarehouseAddress(warehouseModal.request, warehouseModal.address)}
                 disabled={processingId === warehouseModal.request.id}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60"
+                className="px-5 py-2 bg-[#96572A] text-white rounded-full hover:bg-[#7A4623] disabled:opacity-60 text-sm font-medium transition-colors"
               >
                 {processingId === warehouseModal.request.id ? "Updating…" : "Update Address"}
               </button>
