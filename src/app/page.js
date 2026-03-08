@@ -168,9 +168,6 @@ export default function ReturnPortal() {
         throw new Error("reCAPTCHA not ready");
       }
       
-      // Small delay to ensure reCAPTCHA is properly initialized
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
       const confirmation = await signInWithPhoneNumber(auth, formattedPhone, verifier);
       
       // Store confirmation result immediately
@@ -317,9 +314,6 @@ export default function ReturnPortal() {
           // Get fresh reCAPTCHA verifier (handles container cleanup internally)
           const verifier = getRecaptchaVerifier();
           if (!verifier) throw new Error("reCAPTCHA not ready");
-          
-          // Small delay to ensure reCAPTCHA is properly initialized
-          await new Promise(resolve => setTimeout(resolve, 500));
           
           console.log("Sending OTP to found phone:", formattedPhone);
           const confirmation = await signInWithPhoneNumber(auth, formattedPhone, verifier);
@@ -566,6 +560,69 @@ export default function ReturnPortal() {
     const hours = Math.floor(ms / (60 * 60 * 1000));
     const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
     return `${hours}h ${minutes}m left`;
+  };
+
+  // --- CENTRALIZED ORDER ACTION PERMISSIONS ---
+  const getOrderActions = (order) => {
+    const isCancelled = !!order.cancelled_at;
+    const fulfillmentStatus = (order.fulfillment_status || order.displayFulfillmentStatus || '').toUpperCase();
+    const isFulfilled = fulfillmentStatus === 'FULFILLED' || fulfillmentStatus === 'DELIVERED';
+    const isShipped = isFulfilled || fulfillmentStatus === 'PARTIAL' || fulfillmentStatus === 'IN_PROGRESS'
+      || (Array.isArray(order.fulfillments) && order.fulfillments.length > 0 && order.fulfillments[0]?.status === 'success');
+    const isDelivered = isFulfilled
+      || (order.delivery_status?.message === 'Eligible for Return')
+      || (order.delivery_status?.message === 'Delivered')
+      || (order.delivery_status?.message === 'Return Window Closed')
+      || (order.delivery_status?.message === 'Delivered (Date Unknown)');
+
+    const editWindow = canEditOrder(order);
+    const cancelWindow = canCancelOrder(order);
+    const eligibility = checkEligibility((order.line_items || [])[0], order);
+    const hasReturnableItems = (order.line_items || []).some(item => {
+      const elig = checkEligibility(item, order);
+      return elig.eligible && !isItemAlreadyReturned(item);
+    });
+
+    // Modify action
+    let modify = { visible: true, enabled: false, reason: '' };
+    if (isCancelled) {
+      modify.reason = 'Order already cancelled';
+    } else if (isShipped) {
+      modify.reason = 'Order has already been shipped';
+    } else if (!editWindow.canEdit) {
+      modify.reason = 'Modification window (3 hours) has expired';
+    } else {
+      modify.enabled = true;
+    }
+
+    // Cancel action
+    let cancel = { visible: true, enabled: false, reason: '' };
+    if (isCancelled) {
+      cancel.reason = 'Order already cancelled';
+    } else if (isShipped) {
+      cancel.reason = 'Cannot cancel a shipped order';
+    } else if (!cancelWindow) {
+      cancel.reason = 'Cancellation window (1 hour) has expired';
+    } else {
+      cancel.enabled = true;
+    }
+
+    // Return action
+    let returnAction = { visible: true, enabled: false, reason: '' };
+    if (isCancelled) {
+      returnAction.visible = false; // hide entirely per business rule
+      returnAction.reason = 'Order already cancelled';
+    } else if (!isDelivered) {
+      returnAction.enabled = false;
+      returnAction.reason = 'Order must be delivered before a return can be requested';
+    } else if (!hasReturnableItems) {
+      returnAction.enabled = false;
+      returnAction.reason = eligibility.reason || 'No items eligible for return';
+    } else {
+      returnAction.enabled = true;
+    }
+
+    return { modify, cancel, return: returnAction };
   };
 
   // --- NAVIGATION HANDLERS ---
@@ -1415,44 +1472,87 @@ export default function ReturnPortal() {
                                   </svg>
                                 </button>
                                 
-                                {openKebabMenu === order.id && (
+                                {openKebabMenu === order.id && (() => {
+                                  const actions = getOrderActions(order);
+                                  return (
                                   <>
                                     <div className="fixed inset-0 z-10" onClick={() => setOpenKebabMenu(null)} />
-                                    <div className="absolute right-0 mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-20">
-                                      {!order.cancelled_at && canEditOrder(order).canEdit && (
+                                    <div className="absolute right-0 mt-1 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-20">
+                                      {/* Modify Order */}
+                                      <div className="relative group">
                                         <button
-                                          onClick={() => handleOrderAction(order, 'modify')}
-                                          className="w-full text-left px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center space-x-2.5 transition-colors"
+                                          onClick={() => actions.modify.enabled && handleOrderAction(order, 'modify')}
+                                          disabled={!actions.modify.enabled}
+                                          className={`w-full text-left px-4 py-2.5 text-sm flex items-center space-x-2.5 transition-colors ${
+                                            actions.modify.enabled
+                                              ? 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 cursor-pointer'
+                                              : 'text-gray-300 cursor-not-allowed'
+                                          }`}
                                         >
-                                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                                          <svg className={`w-4 h-4 ${actions.modify.enabled ? 'text-gray-400' : 'text-gray-200'}`} fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
                                           </svg>
                                           <span>Modify Order</span>
                                         </button>
-                                      )}
-                                      {!order.cancelled_at && canCancelOrder(order) && (
+                                        {!actions.modify.enabled && (
+                                          <div className="hidden group-hover:block absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2.5 py-1.5 bg-gray-900 text-white text-[11px] rounded-lg whitespace-nowrap z-30 shadow-lg">
+                                            {actions.modify.reason}
+                                            <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900" />
+                                          </div>
+                                        )}
+                                      </div>
+                                      {/* Cancel Order */}
+                                      <div className="relative group">
                                         <button
-                                          onClick={() => handleOrderAction(order, 'cancel')}
-                                          className="w-full text-left px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center space-x-2.5 transition-colors"
+                                          onClick={() => actions.cancel.enabled && handleOrderAction(order, 'cancel')}
+                                          disabled={!actions.cancel.enabled}
+                                          className={`w-full text-left px-4 py-2.5 text-sm flex items-center space-x-2.5 transition-colors ${
+                                            actions.cancel.enabled
+                                              ? 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 cursor-pointer'
+                                              : 'text-gray-300 cursor-not-allowed'
+                                          }`}
                                         >
-                                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                                          <svg className={`w-4 h-4 ${actions.cancel.enabled ? 'text-gray-400' : 'text-gray-200'}`} fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                           </svg>
                                           <span>Cancel Order</span>
                                         </button>
+                                        {!actions.cancel.enabled && (
+                                          <div className="hidden group-hover:block absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2.5 py-1.5 bg-gray-900 text-white text-[11px] rounded-lg whitespace-nowrap z-30 shadow-lg">
+                                            {actions.cancel.reason}
+                                            <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900" />
+                                          </div>
+                                        )}
+                                      </div>
+                                      {/* Return Order — hidden entirely when cancelled */}
+                                      {actions.return.visible && (
+                                        <div className="relative group">
+                                          <button
+                                            onClick={() => actions.return.enabled && handleOrderAction(order, 'return')}
+                                            disabled={!actions.return.enabled}
+                                            className={`w-full text-left px-4 py-2.5 text-sm flex items-center space-x-2.5 transition-colors ${
+                                              actions.return.enabled
+                                                ? 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 cursor-pointer'
+                                                : 'text-gray-300 cursor-not-allowed'
+                                            }`}
+                                          >
+                                            <svg className={`w-4 h-4 ${actions.return.enabled ? 'text-gray-400' : 'text-gray-200'}`} fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+                                            </svg>
+                                            <span>Return Order</span>
+                                          </button>
+                                          {!actions.return.enabled && (
+                                            <div className="hidden group-hover:block absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2.5 py-1.5 bg-gray-900 text-white text-[11px] rounded-lg whitespace-nowrap z-30 shadow-lg">
+                                              {actions.return.reason}
+                                              <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900" />
+                                            </div>
+                                          )}
+                                        </div>
                                       )}
-                                      <button
-                                        onClick={() => handleOrderAction(order, 'return')}
-                                        className="w-full text-left px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center space-x-2.5 transition-colors"
-                                      >
-                                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
-                                        </svg>
-                                        <span>Return Order</span>
-                                      </button>
                                     </div>
                                   </>
-                                )}
+                                  );
+                                })()}
                               </div>
                             </div>
                           </div>
@@ -1617,44 +1717,87 @@ export default function ReturnPortal() {
                                             </svg>
                                           </button>
                                           
-                                          {openKebabMenu === order.id && (
+                                          {openKebabMenu === order.id && (() => {
+                                            const actions = getOrderActions(order);
+                                            return (
                                             <>
                                               <div className="fixed inset-0 z-10" onClick={() => setOpenKebabMenu(null)} />
-                                              <div className="absolute right-0 mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-20">
-                                                {!order.cancelled_at && canEditOrder(order).canEdit && (
+                                              <div className="absolute right-0 mt-1 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-20">
+                                                {/* Modify Order */}
+                                                <div className="relative group">
                                                   <button
-                                                    onClick={() => handleOrderAction(order, 'modify')}
-                                                    className="w-full text-left px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center space-x-2.5 transition-colors"
+                                                    onClick={() => actions.modify.enabled && handleOrderAction(order, 'modify')}
+                                                    disabled={!actions.modify.enabled}
+                                                    className={`w-full text-left px-4 py-2.5 text-sm flex items-center space-x-2.5 transition-colors ${
+                                                      actions.modify.enabled
+                                                        ? 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 cursor-pointer'
+                                                        : 'text-gray-300 cursor-not-allowed'
+                                                    }`}
                                                   >
-                                                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                                                    <svg className={`w-4 h-4 ${actions.modify.enabled ? 'text-gray-400' : 'text-gray-200'}`} fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
                                                       <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
                                                     </svg>
                                                     <span>Modify Order</span>
                                                   </button>
-                                                )}
-                                                {!order.cancelled_at && canCancelOrder(order) && (
+                                                  {!actions.modify.enabled && (
+                                                    <div className="hidden group-hover:block absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2.5 py-1.5 bg-gray-900 text-white text-[11px] rounded-lg whitespace-nowrap z-30 shadow-lg">
+                                                      {actions.modify.reason}
+                                                      <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900" />
+                                                    </div>
+                                                  )}
+                                                </div>
+                                                {/* Cancel Order */}
+                                                <div className="relative group">
                                                   <button
-                                                    onClick={() => handleOrderAction(order, 'cancel')}
-                                                    className="w-full text-left px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center space-x-2.5 transition-colors"
+                                                    onClick={() => actions.cancel.enabled && handleOrderAction(order, 'cancel')}
+                                                    disabled={!actions.cancel.enabled}
+                                                    className={`w-full text-left px-4 py-2.5 text-sm flex items-center space-x-2.5 transition-colors ${
+                                                      actions.cancel.enabled
+                                                        ? 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 cursor-pointer'
+                                                        : 'text-gray-300 cursor-not-allowed'
+                                                    }`}
                                                   >
-                                                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                                                    <svg className={`w-4 h-4 ${actions.cancel.enabled ? 'text-gray-400' : 'text-gray-200'}`} fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
                                                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                                     </svg>
                                                     <span>Cancel Order</span>
                                                   </button>
+                                                  {!actions.cancel.enabled && (
+                                                    <div className="hidden group-hover:block absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2.5 py-1.5 bg-gray-900 text-white text-[11px] rounded-lg whitespace-nowrap z-30 shadow-lg">
+                                                      {actions.cancel.reason}
+                                                      <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900" />
+                                                    </div>
+                                                  )}
+                                                </div>
+                                                {/* Return Order — hidden entirely when cancelled */}
+                                                {actions.return.visible && (
+                                                  <div className="relative group">
+                                                    <button
+                                                      onClick={() => actions.return.enabled && handleOrderAction(order, 'return')}
+                                                      disabled={!actions.return.enabled}
+                                                      className={`w-full text-left px-4 py-2.5 text-sm flex items-center space-x-2.5 transition-colors ${
+                                                        actions.return.enabled
+                                                          ? 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 cursor-pointer'
+                                                          : 'text-gray-300 cursor-not-allowed'
+                                                      }`}
+                                                    >
+                                                      <svg className={`w-4 h-4 ${actions.return.enabled ? 'text-gray-400' : 'text-gray-200'}`} fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+                                                      </svg>
+                                                      <span>Return Order</span>
+                                                    </button>
+                                                    {!actions.return.enabled && (
+                                                      <div className="hidden group-hover:block absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2.5 py-1.5 bg-gray-900 text-white text-[11px] rounded-lg whitespace-nowrap z-30 shadow-lg">
+                                                        {actions.return.reason}
+                                                        <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900" />
+                                                      </div>
+                                                    )}
+                                                  </div>
                                                 )}
-                                                <button
-                                                  onClick={() => handleOrderAction(order, 'return')}
-                                                  className="w-full text-left px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center space-x-2.5 transition-colors"
-                                                >
-                                                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
-                                                  </svg>
-                                                  <span>Return Order</span>
-                                                </button>
                                               </div>
                                             </>
-                                          )}
+                                            );
+                                          })()}
                                         </div>
                                       )}
                                     </td>

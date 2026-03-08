@@ -208,8 +208,6 @@ async function GET_CUSTOMER_DETAILS(orderId) {
     // Clean domain - remove .myshopify.com if it's already included
     const rawDomain = SHOPIFY_STORE_DOMAIN.replace('.myshopify.com', '');
     const graphqlEndpoint = `https://${rawDomain}.myshopify.com/admin/api/2025-01/graphql.json`;
-    
-    console.log(`GraphQL endpoint: ${graphqlEndpoint}`);
 
     // GraphQL query to search orders by name (handles both order ID and order name)
     const graphqlQuery = `
@@ -286,29 +284,18 @@ async function GET_CUSTOMER_DETAILS(orderId) {
       }
     `;
 
-    // Try robust order ID formats (Shopify GraphQL requires proper query syntax)
-    const upperOrderId = cleanOrderId.toUpperCase();
-    
+    // Optimized: only 2 most likely queries instead of 7 sequential ones
     const searchQueries = [
-      `name:${cleanOrderId}`,           // Direct name match
-      `name:#${cleanOrderId}`,          // Name with hashtag
-      `name:${upperOrderId}`,           // Uppercase match
-      `name:#${upperOrderId}`,          // Uppercase with hashtag
-      `order_number:${cleanOrderId}`,   // Order number field
-      `order_number:#${cleanOrderId}`,  // Order number with hashtag
-      `${cleanOrderId}`                 // Global search
+      `name:#${cleanOrderId}`,           // Most common: #1001
+      `name:${cleanOrderId}`,            // Fallback: 1001
     ];
 
     let orderData = null;
     let phoneNumber = null;
 
-    // Try each search query
+    // Try primary queries first
     for (const query of searchQueries) {
       try {
-        console.log(`Trying GraphQL query: ${query}`);
-        console.log(`GraphQL endpoint: ${graphqlEndpoint}`);
-        console.log(`Access token starts with: ${SHOPIFY_ACCESS_TOKEN?.substring(0, 10)}...`);
-        
         const response = await fetch(graphqlEndpoint, {
           method: 'POST',
           headers: {
@@ -323,61 +310,32 @@ async function GET_CUSTOMER_DETAILS(orderId) {
           cache: 'no-store'
         });
 
-        console.log(`GraphQL response status: ${response.status}`);
-        console.log(`GraphQL response headers:`, Object.fromEntries(response.headers.entries()));
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`GraphQL HTTP error: ${response.status} - ${errorText}`);
-          
-          // Parse error for more details
-          try {
-            const errorJson = JSON.parse(errorText);
-            console.error(`Parsed error:`, errorJson);
-          } catch (e) {
-            console.error(`Raw error text: ${errorText}`);
-          }
-          continue;
-        }
+        if (!response.ok) continue;
 
         const data = await response.json();
-        console.log(`GraphQL response structure:`, JSON.stringify(data, null, 2));
-
-        if (data.errors) {
-          console.error(`GraphQL errors:`, JSON.stringify(data.errors, null, 2));
-          continue;
-        }
+        if (data.errors) continue;
 
         const orders = data.data?.orders?.edges?.map(edge => edge.node) || [];
-        console.log(`Found ${orders.length} orders for query: ${query}`);
 
         if (orders.length > 0) {
-          orderData = orders[0]; // Take the first matching order
-          
-          // Extract phone number with fallbacks
+          orderData = orders[0];
           phoneNumber = orderData.phone ||
                        orderData.customer?.phone ||
                        orderData.billingAddress?.phone ||
                        orderData.shippingAddress?.phone ||
                        "";
-          
-          console.log(`Extracted phone number: ${phoneNumber}`);
-          console.log(`Order data:`, JSON.stringify(orderData, null, 2));
           break;
         }
       } catch (error) {
-        console.error(`GraphQL query failed for ${query}:`, error);
+        console.error(`GraphQL query failed for ${query}:`, error.message);
         continue;
       }
     }
 
     if (!orderData) {
-      // Fallback: Try REST API as backup with correct endpoint for order names
-      console.log(`GraphQL failed, trying REST API fallback...`);
+      // Fallback: Try REST API as backup
       try {
-        // Use search endpoint for order names, not direct order lookup
-        const restEndpoint = `https://${rawDomain}.myshopify.com/admin/api/2025-01/orders.json?status=any&query=name:${cleanOrderId}`;
-        console.log(`REST endpoint: ${restEndpoint}`);
+        const restEndpoint = `https://${rawDomain}.myshopify.com/admin/api/2025-01/orders.json?status=any&name=${encodeURIComponent(cleanOrderId)}&limit=1`;
         
         const restResponse = await fetch(restEndpoint, {
           headers: {
@@ -388,31 +346,21 @@ async function GET_CUSTOMER_DETAILS(orderId) {
           cache: 'no-store'
         });
 
-        console.log(`REST response status: ${restResponse.status}`);
-
         if (restResponse.ok) {
           const restData = await restResponse.json();
-          console.log(`REST response data:`, JSON.stringify(restData, null, 2));
           
           if (restData.orders && restData.orders.length > 0) {
-            const restOrder = restData.orders[0]; // Take first matching order
-            
-            // Keep raw REST format — normalizeGraphQLOrder will skip it
+            const restOrder = restData.orders[0];
             phoneNumber = restOrder.phone ||
                          restOrder.customer?.phone ||
                          restOrder.billing_address?.phone ||
                          restOrder.shipping_address?.phone ||
                          "";
-            
-            console.log(`REST fallback successful - phone: ${phoneNumber}`);
             orderData = restOrder;
           }
-        } else {
-          const restError = await restResponse.text();
-          console.error(`REST fallback failed: ${restResponse.status} - ${restError}`);
         }
       } catch (restError) {
-        console.error(`REST fallback error:`, restError);
+        console.error('REST fallback error:', restError.message);
       }
     }
 
@@ -421,30 +369,20 @@ async function GET_CUSTOMER_DETAILS(orderId) {
         { 
           success: false, 
           error: "Order not found. Please verify the Order ID and try again.", 
-          code: "ORDER_NOT_FOUND",
-          details: {
-            orderId: cleanOrderId,
-            searchQueries: searchQueries,
-            endpoint: graphqlEndpoint
-          }
+          code: "ORDER_NOT_FOUND"
         },
         { status: 404 }
       );
     }
 
     if (!phoneNumber) {
-      console.error("No phone number found in order data");
-      console.log("Order data:", JSON.stringify(orderData, null, 2));
       return NextResponse.json(
         { success: false, error: "No phone number found for this order. Please contact customer support.", code: "NO_PHONE_FOUND" },
         { status: 404 }
       );
     }
 
-    console.log(`Successfully fetched order: ${orderData.name || orderData.orderNumber}`);
-    console.log(`Found phone number: ${phoneNumber}`);
-
-    // Use the working phone search logic to find all orders for this phone
+    // Fetch all orders for this phone in parallel (non-blocking for OTP)
     const allOrders = await fetchAllOrdersForPhoneGraphQL(phoneNumber, rawDomain, SHOPIFY_ACCESS_TOKEN);
     
     // Verify the original order is in the results (compare by name — works for both formats)
@@ -455,8 +393,6 @@ async function GET_CUSTOMER_DETAILS(orderId) {
       // Add the original order to the results
       allOrders.push(orderData);
     }
-    
-    console.log(`Found ${allOrders.length} orders for this phone number`);
     
     // Normalize all orders to REST-like flat format for the frontend
     const normalizedOrders = allOrders.map(normalizeGraphQLOrder);
@@ -501,7 +437,7 @@ async function fetchAllOrdersForPhoneGraphQL(phoneNumber, domain, token) {
   const last6 = cleanPhone.slice(-6);
   const last8 = cleanPhone.slice(-8);
   
-  console.log(`Fetching orders for phone: ${phoneNumber} (clean: ${cleanPhone})`);
+  console.log(`Fetching orders for phone: ${cleanPhone.slice(-4)}`);
   
   const graphqlEndpoint = `https://${domain}.myshopify.com/admin/api/2025-01/graphql.json`;
   
@@ -582,19 +518,14 @@ async function fetchAllOrdersForPhoneGraphQL(phoneNumber, domain, token) {
 
   let allOrders = [];
   
-  // Try different phone number formats in search queries
+  // Optimized: only 2 most-likely queries instead of 5
   const searchQueries = [
     `phone:${cleanPhone}`,
     `phone:${phoneNumber}`,
-    `phone:${last4}`,
-    `phone:${last6}`,
-    `phone:${last8}`
   ];
 
   for (const query of searchQueries) {
     try {
-      console.log(`Trying phone search query: ${query}`);
-      
       const response = await fetch(graphqlEndpoint, {
         method: 'POST',
         headers: {
@@ -609,28 +540,19 @@ async function fetchAllOrdersForPhoneGraphQL(phoneNumber, domain, token) {
         cache: 'no-store'
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Phone search GraphQL error: ${errorText}`);
-        continue;
-      }
+      if (!response.ok) continue;
 
       const data = await response.json();
-
-      if (data.errors) {
-        console.error(`Phone search GraphQL errors: ${JSON.stringify(data.errors)}`);
-        continue;
-      }
+      if (data.errors) continue;
 
       const orders = data.data?.orders?.edges?.map(edge => edge.node) || [];
-      console.log(`Found ${orders.length} orders for phone query: ${query}`);
       
       if (orders.length > 0) {
         allOrders.push(...orders);
-        break; // Stop after first successful search
+        break;
       }
     } catch (error) {
-      console.error(`Phone search failed for query ${query}:`, error);
+      console.error(`Phone search failed for query ${query}:`, error.message);
       continue;
     }
   }
@@ -640,6 +562,5 @@ async function fetchAllOrdersForPhoneGraphQL(phoneNumber, domain, token) {
     index === self.findIndex((o) => o.id === order.id)
   );
   
-  console.log(`Total unique orders found: ${uniqueOrders.length}`);
   return uniqueOrders;
 }
