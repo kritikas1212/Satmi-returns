@@ -86,7 +86,17 @@ export async function POST(request) {
     }
 
     // ---------------------------------------------------------------
-    // 2. Server-side 1-hour window validation
+    // 2a. Block prepaid order cancellation
+    // ---------------------------------------------------------------
+    if (order.financial_status === 'paid') {
+      return NextResponse.json(
+        { success: false, error: 'Please contact Satmi Support for the cancellation of this order', code: 'PREPAID_CANCEL_BLOCKED' },
+        { status: 403 }
+      );
+    }
+
+    // ---------------------------------------------------------------
+    // 2b. Server-side 1-hour window validation
     // ---------------------------------------------------------------
     const createdAt = new Date(order.created_at).getTime();
     const now = Date.now();

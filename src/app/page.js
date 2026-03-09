@@ -596,9 +596,12 @@ export default function ReturnPortal() {
     }
 
     // Cancel action
+    const isPrepaid = (order.financial_status || '').toLowerCase() === 'paid';
     let cancel = { visible: true, enabled: false, reason: '' };
     if (isCancelled) {
       cancel.reason = 'Order already cancelled';
+    } else if (isPrepaid) {
+      cancel.reason = 'Please contact Satmi Support for the cancellation of this order';
     } else if (isShipped) {
       cancel.reason = 'Cannot cancel a shipped order';
     } else if (!cancelWindow) {
