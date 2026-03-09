@@ -1521,9 +1521,9 @@ export default function ReturnPortal() {
                                           <span>Cancel Order</span>
                                         </button>
                                         {!actions.cancel.enabled && (
-                                          <div className="hidden group-hover:block absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2.5 py-1.5 bg-gray-900 text-white text-[11px] rounded-lg whitespace-nowrap z-30 shadow-lg">
+                                          <div className="hidden group-hover:block absolute right-full top-1/2 -translate-y-1/2 mr-2 px-3 py-2 bg-[#FDF6EF] text-[#96572A] text-[11px] rounded-lg w-52 z-30 shadow-lg border border-[#E8D5C0]">
                                             {actions.cancel.reason}
-                                            <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900" />
+                                            <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-[#E8D5C0]" />
                                           </div>
                                         )}
                                       </div>
@@ -1766,9 +1766,9 @@ export default function ReturnPortal() {
                                                     <span>Cancel Order</span>
                                                   </button>
                                                   {!actions.cancel.enabled && (
-                                                    <div className="hidden group-hover:block absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2.5 py-1.5 bg-gray-900 text-white text-[11px] rounded-lg whitespace-nowrap z-30 shadow-lg">
+                                                    <div className="hidden group-hover:block absolute right-full top-1/2 -translate-y-1/2 mr-2 px-3 py-2 bg-[#FDF6EF] text-[#96572A] text-[11px] rounded-lg w-52 z-30 shadow-lg border border-[#E8D5C0]">
                                                       {actions.cancel.reason}
-                                                      <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900" />
+                                                      <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-[#E8D5C0]" />
                                                     </div>
                                                   )}
                                                 </div>
