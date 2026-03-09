@@ -227,6 +227,12 @@ export default function ReturnPortal() {
       setUser(res.user);
       const token = await res.user.getIdToken();
       
+      // Clear all auth-related state on successful login
+      setError("");
+      setSuccessMessage("");
+      setOtp("");
+      setConfirmationResult(null);
+      
       // Check if we have pre-fetched orders from order ID login
       if (window.tempOrders && window.tempOrders.length > 0) {
         console.log("Using pre-fetched orders from order ID login");
@@ -979,6 +985,9 @@ export default function ReturnPortal() {
     const unsubscribe = auth.onAuthStateChanged((currentUser) => {
       setUser(currentUser);
       if (currentUser) {
+        // Clear any stale auth/OTP errors when user successfully logs in
+        setError("");
+        setSuccessMessage("");
         fetchOrders(phoneNumber, null); // Fetch orders when logged in
         fetchReturnHistory(phoneNumber); // Fetch existing returns for duplicate detection
       }
@@ -1013,6 +1022,8 @@ export default function ReturnPortal() {
                   setAuthMode("phone");
                   setError("");
                   setSuccessMessage("");
+                  setOtp("");
+                  setConfirmationResult(null);
                 }}
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
                   authMode === "phone" 
@@ -1028,6 +1039,8 @@ export default function ReturnPortal() {
                   setError("");
                   setSuccessMessage("");
                   setPhoneNumber("+91");
+                  setOtp("");
+                  setConfirmationResult(null);
                 }}
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
                   authMode === "orderId" 
@@ -1131,7 +1144,12 @@ export default function ReturnPortal() {
             )}
           </div>
 
-          {error && (
+          {error && authMode === "otp" && (
+            <div className="mt-6 text-red-600 text-xs text-center bg-red-50 p-2 rounded">
+              {error}
+            </div>
+          )}
+          {error && authMode !== "otp" && !error.toLowerCase().includes("otp") && !error.toLowerCase().includes("session expired") && !error.toLowerCase().includes("verification") && (
             <div className="mt-6 text-red-600 text-xs text-center bg-red-50 p-2 rounded">
               {error}
             </div>
@@ -1407,7 +1425,7 @@ export default function ReturnPortal() {
             </div>
           </div>
         )}
-        {error && (
+        {error && !error.toLowerCase().includes("otp") && !error.toLowerCase().includes("session expired") && !error.toLowerCase().includes("verification") && !error.toLowerCase().includes("invalid phone") && (
           <div className="max-w-7xl mx-auto mt-4 px-4">
             <div className="bg-red-50 border border-red-100 text-red-600 px-4 py-3 rounded-xl text-sm">
               {error}
@@ -1498,9 +1516,9 @@ export default function ReturnPortal() {
                                           <span>Modify Order</span>
                                         </button>
                                         {!actions.modify.enabled && (
-                                          <div className="hidden group-hover:block absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2.5 py-1.5 bg-gray-900 text-white text-[11px] rounded-lg whitespace-nowrap z-30 shadow-lg">
+                                          <div className="hidden group-hover:block absolute right-full top-1/2 -translate-y-1/2 mr-2 px-3 py-2 bg-[#FDF6EF] text-[#96572A] text-[11px] rounded-lg w-52 z-30 shadow-lg border border-[#E8D5C0]">
                                             {actions.modify.reason}
-                                            <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900" />
+                                            <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-[#E8D5C0]" />
                                           </div>
                                         )}
                                       </div>
@@ -1545,9 +1563,9 @@ export default function ReturnPortal() {
                                             <span>Return Order</span>
                                           </button>
                                           {!actions.return.enabled && (
-                                            <div className="hidden group-hover:block absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2.5 py-1.5 bg-gray-900 text-white text-[11px] rounded-lg whitespace-nowrap z-30 shadow-lg">
+                                            <div className="hidden group-hover:block absolute right-full top-1/2 -translate-y-1/2 mr-2 px-3 py-2 bg-[#FDF6EF] text-[#96572A] text-[11px] rounded-lg w-52 z-30 shadow-lg border border-[#E8D5C0]">
                                               {actions.return.reason}
-                                              <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900" />
+                                              <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-[#E8D5C0]" />
                                             </div>
                                           )}
                                         </div>
@@ -1619,9 +1637,12 @@ export default function ReturnPortal() {
                                           : "bg-gray-50 text-gray-400 border border-gray-200"
                                     }`}>
                                       {alreadyReturned ? "Returned" :
+                                       order.cancelled_at ? "Cancelled" :
                                        eligibility.eligible ? "Eligible" : 
-                                       eligibility.reason === "Return window closed" ? "Window Closed" : 
-                                       "Pending Delivery"}
+                                       eligibility.reason === "Return window closed" ? "Window Closed" :
+                                       order.delivery_status?.message === "Delivered" || order.delivery_status?.message === "Eligible for Return" || order.delivery_status?.message === "Delivered (Date Unknown)" ? "Delivered" :
+                                       order.fulfillment_status === "fulfilled" || order.fulfillment_status === "partial" ? "Shipped" :
+                                       "Processing"}
                                     </span>
                                   </div>
                                 </div>
@@ -1700,9 +1721,12 @@ export default function ReturnPortal() {
                                             : "bg-gray-50 text-gray-400 border border-gray-200"
                                       }`}>
                                         {alreadyReturned ? "Returned" :
+                                         order.cancelled_at ? "Cancelled" :
                                          eligibility.eligible ? "Eligible" : 
-                                         eligibility.reason === "Return window closed" ? "Closed" : 
-                                         "Pending"}
+                                         eligibility.reason === "Return window closed" ? "Closed" :
+                                         order.delivery_status?.message === "Delivered" || order.delivery_status?.message === "Eligible for Return" || order.delivery_status?.message === "Delivered (Date Unknown)" ? "Delivered" :
+                                         order.fulfillment_status === "fulfilled" || order.fulfillment_status === "partial" ? "Shipped" :
+                                         "Processing"}
                                       </span>
                                     </td>
                                     <td className="px-4 py-3.5">
@@ -1743,9 +1767,9 @@ export default function ReturnPortal() {
                                                     <span>Modify Order</span>
                                                   </button>
                                                   {!actions.modify.enabled && (
-                                                    <div className="hidden group-hover:block absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2.5 py-1.5 bg-gray-900 text-white text-[11px] rounded-lg whitespace-nowrap z-30 shadow-lg">
+                                                    <div className="hidden group-hover:block absolute right-full top-1/2 -translate-y-1/2 mr-2 px-3 py-2 bg-[#FDF6EF] text-[#96572A] text-[11px] rounded-lg w-52 z-30 shadow-lg border border-[#E8D5C0]">
                                                       {actions.modify.reason}
-                                                      <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900" />
+                                                      <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-[#E8D5C0]" />
                                                     </div>
                                                   )}
                                                 </div>
@@ -1790,9 +1814,9 @@ export default function ReturnPortal() {
                                                       <span>Return Order</span>
                                                     </button>
                                                     {!actions.return.enabled && (
-                                                      <div className="hidden group-hover:block absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2.5 py-1.5 bg-gray-900 text-white text-[11px] rounded-lg whitespace-nowrap z-30 shadow-lg">
+                                                      <div className="hidden group-hover:block absolute right-full top-1/2 -translate-y-1/2 mr-2 px-3 py-2 bg-[#FDF6EF] text-[#96572A] text-[11px] rounded-lg w-52 z-30 shadow-lg border border-[#E8D5C0]">
                                                         {actions.return.reason}
-                                                        <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900" />
+                                                        <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-[#E8D5C0]" />
                                                       </div>
                                                     )}
                                                   </div>
