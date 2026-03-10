@@ -4,6 +4,7 @@ import { db } from '@/lib/firebaseConfig';
 import { z } from 'zod';
 
 const FROM_EMAIL = "Satmi Support <support@satmi.in>";
+const MAX_RETURN_REQUESTS_PER_USER = 2;
 
 // Validation schemas
 const SubmitReturnSchema = z.object({
@@ -63,6 +64,27 @@ async function checkExistingReturns(orderId, lineItemIds) {
   } catch (error) {
     console.error("Error checking existing returns:", error);
     return { hasExistingReturns: false, alreadyReturned: [] };
+  }
+}
+
+// Enforce a hard per-user limit (includes all requests, even rejected)
+async function checkUserReturnLimit(phone) {
+  try {
+    const returnsQuery = query(
+      collection(db, "returns"),
+      where("phone", "==", phone)
+    );
+
+    const querySnapshot = await getDocs(returnsQuery);
+    const totalReturns = querySnapshot.size;
+
+    return {
+      exceeded: totalReturns >= MAX_RETURN_REQUESTS_PER_USER,
+      totalReturns
+    };
+  } catch (error) {
+    console.error("Error checking user return limit:", error);
+    return { exceeded: false, totalReturns: 0 };
   }
 }
 
@@ -223,6 +245,23 @@ export async function POST(request) {
       return NextResponse.json(
         { success: false, error: "Items must include lineItemId for idempotency check", code: "MISSING_LINE_ITEM_IDS" },
         { status: 400 }
+      );
+    }
+
+    // Hard cap: max 2 return requests per user (including rejected requests)
+    const userLimitCheck = await checkUserReturnLimit(phone);
+    if (userLimitCheck.exceeded) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "You have reached the maximum limit of 2 return requests. Please contact support@satmi.in for further assistance.",
+          code: "RETURN_LIMIT_REACHED",
+          details: {
+            totalReturns: userLimitCheck.totalReturns,
+            maxAllowed: MAX_RETURN_REQUESTS_PER_USER
+          }
+        },
+        { status: 429 }
       );
     }
 

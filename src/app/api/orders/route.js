@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { trackShipmentByAwb, getShiprocketToken } from '@/lib/shiprocketServer';
 
 export async function POST(request) {
   try {
@@ -157,14 +158,49 @@ export async function POST(request) {
     });
 
     // ---------------------------------------------------------
-    // 6. ENRICH ORDERS (Delivery Status Logic)
-    //    Optimization: only make fulfillment events API calls for
-    //    orders that are marked "delivered" by Shopify — skip the
-    //    rest to avoid O(n) network roundtrips that cause 12s+ load.
+    // 6. ENRICH ORDERS (Delivery Status via Shiprocket + Shopify fallback)
+    //    For each order with a tracking number (AWB), query Shiprocket
+    //    for the real delivery status. Deduplicate AWBs so each is
+    //    fetched only once. Fall back to Shopify if Shiprocket fails.
     // ---------------------------------------------------------
+
+    // Collect unique AWBs across all orders
+    const awbSet = new Set();
+    orders.forEach(order => {
+      const fulfillment = (order.fulfillments || []).find(f => f.tracking_number);
+      if (fulfillment?.tracking_number) awbSet.add(fulfillment.tracking_number);
+    });
+
+    // Batch-fetch Shiprocket tracking (one token, parallel per AWB, max 5 concurrent)
+    const shiprocketTrackingMap = {};
+    if (awbSet.size > 0) {
+      let srToken = null;
+      try {
+        srToken = await getShiprocketToken();
+      } catch (e) {
+        console.error('Shiprocket token error (will fall back to Shopify):', e);
+      }
+
+      if (srToken) {
+        const awbArray = Array.from(awbSet);
+        const BATCH = 5;
+        for (let i = 0; i < awbArray.length; i += BATCH) {
+          const batch = awbArray.slice(i, i + BATCH);
+          const results = await Promise.all(
+            batch.map(awb => trackShipmentByAwb(awb, srToken))
+          );
+          batch.forEach((awb, idx) => {
+            if (results[idx]) shiprocketTrackingMap[awb] = results[idx];
+          });
+        }
+      }
+    }
+
     const enrichedOrders = await Promise.all(orders.map(async (order) => {
       const fulfillment = (order.fulfillments || []).find((f) => f.tracking_number);
-      
+      const awb = fulfillment?.tracking_number || null;
+      const srTracking = awb ? shiprocketTrackingMap[awb] : null;
+
       let deliveredDate = null;
       let isReturnable = false;
       let statusMessage = "Processing";
@@ -183,20 +219,69 @@ export async function POST(request) {
         statusMessage = "Order Cancelled";
         returnEligibilityReason = "This order was cancelled and is not eligible for returns";
         isReturnable = false;
+      } else if (srTracking) {
+        // ---- Shiprocket-based status (primary) ----
+        const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+        const now = Date.now();
+
+        if (srTracking.status === "DELIVERED") {
+          deliveredDate = srTracking.deliveredDate;
+          if (deliveredDate) {
+            const deliveryTime = new Date(deliveredDate).getTime();
+            if (now <= deliveryTime + threeDaysMs) {
+              isReturnable = true;
+              statusMessage = "Delivered";
+              returnEligibilityReason = "This item was delivered recently and is eligible for return";
+            } else {
+              isReturnable = false;
+              statusMessage = "Return Window Closed";
+              returnEligibilityReason = `Return window closed. Delivered more than 3 days ago (${new Date(deliveredDate).toLocaleDateString()})`;
+            }
+          } else {
+            // Delivered but no date from Shiprocket — use fulfillment date
+            const fulfillmentCreated = new Date(fulfillment.created_at || order.created_at).getTime();
+            if (now <= fulfillmentCreated + 7 * 24 * 60 * 60 * 1000) {
+              statusMessage = "Delivered";
+              isReturnable = true;
+              returnEligibilityReason = "This item was delivered recently and is eligible for return";
+            } else {
+              statusMessage = "Delivered (Date Unknown)";
+              isReturnable = false;
+              returnEligibilityReason = "This item was delivered too long ago and is not eligible for return";
+            }
+          }
+        } else if (srTracking.status === "OUT_FOR_DELIVERY") {
+          statusMessage = "Out for Delivery";
+          returnEligibilityReason = "This item is out for delivery and not yet eligible for return";
+          isReturnable = false;
+        } else if (srTracking.status === "IN_TRANSIT" || srTracking.status === "PICKED_UP") {
+          statusMessage = "In Transit";
+          returnEligibilityReason = "This item is currently in transit and not yet eligible for return";
+          isReturnable = false;
+        } else if (srTracking.status === "RTO") {
+          statusMessage = "Return to Origin";
+          returnEligibilityReason = "This shipment is being returned to the seller";
+          isReturnable = false;
+        } else if (srTracking.status === "CANCELLED") {
+          statusMessage = "Shipment Cancelled";
+          returnEligibilityReason = "This shipment was cancelled";
+          isReturnable = false;
+        } else {
+          statusMessage = "Shipped";
+          returnEligibilityReason = "This item has been shipped but status is pending";
+          isReturnable = false;
+        }
       } else if (fulfillment && fulfillment.shipment_status === 'delivered') {
-        // Only fetch fulfillment events for actually-delivered orders
-        // Use the fulfillment created_at as a fast fallback to avoid the extra API call entirely
+        // ---- Shopify fallback (when Shiprocket tracking unavailable) ----
         const fulfillmentCreated = new Date(fulfillment.created_at || order.created_at).getTime();
         const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
         const now = Date.now();
 
-        // If the fulfillment is older than 10 days, don't even bother checking events
         if (now - fulfillmentCreated > 10 * 24 * 60 * 60 * 1000) {
           statusMessage = "Return Window Closed";
           returnEligibilityReason = "Return window closed. Delivered more than 3 days ago";
           isReturnable = false;
         } else {
-          // Recent fulfillment — fetch events to get exact delivery date
           try {
             const eventsUrl = `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2025-01/orders/${order.id}/fulfillments/${fulfillment.id}/events.json`;
             const eventsRes = await fetch(eventsUrl, { headers });
@@ -209,7 +294,7 @@ export async function POST(request) {
 
               if (now <= deliveryTime + threeDaysMs) {
                 isReturnable = true;
-                statusMessage = "Eligible for Return";
+                statusMessage = "Delivered";
                 returnEligibilityReason = "This item was delivered recently and is eligible for return";
               } else {
                 isReturnable = false;
@@ -217,7 +302,6 @@ export async function POST(request) {
                 returnEligibilityReason = `Return window closed. Delivered more than 3 days ago (${new Date(deliveredDate).toLocaleDateString()})`;
               }
             } else {
-              // Marked delivered but no event date — use fulfillment date
               if (now <= fulfillmentCreated + 7 * 24 * 60 * 60 * 1000) {
                 statusMessage = "Delivered";
                 isReturnable = true;
@@ -230,7 +314,6 @@ export async function POST(request) {
             }
           } catch (e) {
             console.error('Fulfillment events fetch error:', e);
-            // Fallback: allow return if fulfillment is recent
             if (now <= fulfillmentCreated + threeDaysMs) {
               statusMessage = "Delivered";
               isReturnable = true;

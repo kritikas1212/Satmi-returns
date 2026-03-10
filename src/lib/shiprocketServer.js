@@ -108,6 +108,51 @@ async function getWarehouseDetails() {
   };
 }
 
+/**
+ * Track a shipment by AWB number via Shiprocket.
+ * Returns { status, deliveredDate } or null on failure.
+ * status values: "DELIVERED", "IN_TRANSIT", "OUT_FOR_DELIVERY", "PICKED_UP", "PENDING", etc.
+ */
+export async function trackShipmentByAwb(awb, token) {
+  if (!awb) return null;
+  try {
+    const srToken = token || await getShiprocketToken();
+    const res = await fetch(`https://apiv2.shiprocket.in/v1/external/courier/track/awb/${encodeURIComponent(awb)}`, {
+      headers: { Authorization: `Bearer ${srToken}` },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const shipment = data?.tracking_data?.shipment_track?.[0];
+    if (!shipment) return null;
+
+    const currentStatus = (shipment.current_status || "").toUpperCase();
+    const deliveredDate = shipment.delivered_date || null;
+
+    // Normalize Shiprocket status strings
+    let normalizedStatus;
+    if (currentStatus === "DELIVERED" || currentStatus.includes("DELIVERED")) {
+      normalizedStatus = "DELIVERED";
+    } else if (currentStatus.includes("OUT FOR DELIVERY") || currentStatus === "OUT_FOR_DELIVERY") {
+      normalizedStatus = "OUT_FOR_DELIVERY";
+    } else if (currentStatus.includes("IN TRANSIT") || currentStatus === "IN_TRANSIT" || currentStatus === "SHIPPED") {
+      normalizedStatus = "IN_TRANSIT";
+    } else if (currentStatus.includes("PICKED UP") || currentStatus === "PICKED_UP") {
+      normalizedStatus = "PICKED_UP";
+    } else if (currentStatus === "RTO" || currentStatus.includes("RETURN")) {
+      normalizedStatus = "RTO";
+    } else if (currentStatus === "CANCELLED") {
+      normalizedStatus = "CANCELLED";
+    } else {
+      normalizedStatus = "PENDING";
+    }
+
+    return { status: normalizedStatus, deliveredDate, rawStatus: shipment.current_status };
+  } catch (e) {
+    console.error("Shiprocket tracking error for AWB", awb, e);
+    return null;
+  }
+}
+
 export async function getShiprocketToken() {
   const email = (process.env.SHIPROCKET_EMAIL || "").trim();
   const password = (process.env.SHIPROCKET_PASSWORD || "").trim();

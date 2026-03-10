@@ -166,7 +166,7 @@ export default function AdminDashboard() {
 
       setApproveModal({ open: false, request: null });
       if (data.labelUrl) window.open(data.labelUrl, "_blank");
-      alert(`RTO created. Label ${data.labelUrl ? "opened and " : ""}${data.emailSent ? "approval email sent" : "approval email queued/failed"} for ${request.email}.`);
+      alert(`Return created. Label ${data.labelUrl ? "opened and " : ""}${data.emailSent ? "approval email sent" : "approval email queued/failed"} for ${request.email}.`);
     } catch (error) {
       console.error("Approve error:", error);
       alert("Error: " + error.message);
@@ -391,7 +391,7 @@ export default function AdminDashboard() {
                   className={`p-2 rounded-full transition-all ${
                     viewMode === "cards"
                       ? "bg-white text-[#96572A] shadow-sm"
-                      : "text-gray-400 hover:text-gray-600"
+                      : "text-black hover:text-gray-600"
                   }`}
                   title="Card View"
                 >
@@ -407,7 +407,7 @@ export default function AdminDashboard() {
                   className={`p-2 rounded-full transition-all ${
                     viewMode === "table"
                       ? "bg-white text-[#96572A] shadow-sm"
-                      : "text-gray-400 hover:text-gray-600"
+                      : "text-black hover:text-gray-600"
                   }`}
                   title="Table View"
                 >
@@ -418,7 +418,7 @@ export default function AdminDashboard() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-xs text-gray-400">{user.email}</span>
+              <span className="text-xs text-black">{user.email}</span>
               <button
                 onClick={handleLogout}
                 className="text-xs font-medium text-red-600 hover:text-red-700 transition-colors"
@@ -439,7 +439,7 @@ export default function AdminDashboard() {
                   className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                     statusFilter === s
                       ? "bg-[#96572A] text-white shadow-sm"
-                      : "bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-100"
+                      : "bg-gray-50 text-black hover:bg-gray-100 border border-gray-100"
                   }`}
                 >
                   {s}
@@ -512,38 +512,38 @@ export default function AdminDashboard() {
         {/* Stats Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
           <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Pending</p>
+            <p className="text-[11px] text-black uppercase tracking-wider font-medium">Pending</p>
             <p className="text-2xl font-bold text-amber-600 mt-1">{stats.pending}</p>
-            <p className="text-[10px] text-gray-300 mt-0.5">Awaiting review</p>
+            <p className="text-[10px] text-black mt-0.5">Awaiting review</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Approved</p>
+            <p className="text-[11px] text-black uppercase tracking-wider font-medium">Approved</p>
             <p className="text-2xl font-bold text-emerald-600 mt-1">{stats.approved}</p>
-            <p className="text-[10px] text-gray-300 mt-0.5">Processed</p>
+            <p className="text-[10px] text-black mt-0.5">Processed</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Rejected</p>
+            <p className="text-[11px] text-black uppercase tracking-wider font-medium">Rejected</p>
             <p className="text-2xl font-bold text-red-500 mt-1">{stats.rejected}</p>
-            <p className="text-[10px] text-gray-300 mt-0.5">Declined</p>
+            <p className="text-[10px] text-black mt-0.5">Declined</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">This Month</p>
+            <p className="text-[11px] text-black uppercase tracking-wider font-medium">This Month</p>
             <p className="text-2xl font-bold text-[#96572A] mt-1">{stats.thisMonth}</p>
-            <p className="text-[10px] text-gray-300 mt-0.5">New returns</p>
+            <p className="text-[10px] text-black mt-0.5">New returns</p>
           </div>
         </div>
         
         {/* Financial Analytics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
           <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Total Refunds</p>
+            <p className="text-[11px] text-black uppercase tracking-wider font-medium">Total Refunds</p>
             <p className="text-2xl font-bold text-purple-600 mt-1">₹{stats.totalRefunds.toFixed(2)}</p>
-            <p className="text-[10px] text-gray-300 mt-0.5">All time</p>
+            <p className="text-[10px] text-black mt-0.5">All time</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Average Refund</p>
+            <p className="text-[11px] text-black uppercase tracking-wider font-medium">Average Refund</p>
             <p className="text-2xl font-bold text-indigo-600 mt-1">₹{stats.avgRefundAmount.toFixed(2)}</p>
-            <p className="text-[10px] text-gray-300 mt-0.5">Per return</p>
+            <p className="text-[10px] text-black mt-0.5">Per return</p>
           </div>
         </div>
         
@@ -557,7 +557,7 @@ export default function AdminDashboard() {
                 topReturnReasons.map(([reason, count], index) => (
                   <div key={reason} className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <span className="text-[10px] font-medium text-gray-400 w-5">#{index + 1}</span>
+                      <span className="text-[10px] font-medium text-black w-5">#{index + 1}</span>
                       <span className="text-xs text-gray-700">{reason}</span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -567,12 +567,12 @@ export default function AdminDashboard() {
                           style={{ width: `${(count / returns.length) * 100}%` }}
                         />
                       </div>
-                      <span className="text-xs font-medium text-gray-500 w-6 text-right">{count}</span>
+                      <span className="text-xs font-medium text-black w-6 text-right">{count}</span>
                     </div>
                   </div>
                 ))
               ) : (
-                <p className="text-xs text-gray-400">No data available</p>
+                <p className="text-xs text-black">No data available</p>
               )}
             </div>
           </div>
@@ -600,13 +600,13 @@ export default function AdminDashboard() {
                               style={{ width: `${(count / maxCount) * 100}%` }}
                             />
                           </div>
-                          <span className="text-xs font-medium text-gray-500 w-6 text-right">{count}</span>
+                          <span className="text-xs font-medium text-black w-6 text-right">{count}</span>
                         </div>
                       </div>
                     );
                   })
               ) : (
-                <p className="text-xs text-gray-400">No data available</p>
+                <p className="text-xs text-black">No data available</p>
               )}
             </div>
           </div>
@@ -617,7 +617,7 @@ export default function AdminDashboard() {
             <svg className="w-10 h-10 text-gray-200 mx-auto mb-3" fill="none" stroke="currentColor" strokeWidth={1} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
             </svg>
-            <p className="text-gray-400 text-sm">No return requests {statusFilter !== "All" ? `with status "${statusFilter}"` : ""}</p>
+            <p className="text-black text-sm">No return requests {statusFilter !== "All" ? `with status "${statusFilter}"` : ""}</p>
           </div>
         ) : (
           <>
@@ -655,7 +655,7 @@ export default function AdminDashboard() {
                             />
                             <div>
                               <div className="font-semibold text-gray-800 text-sm">{req.orderId}</div>
-                              <div className="text-xs text-gray-400">{req.customerName}</div>
+                              <div className="text-xs text-black">{req.customerName}</div>
                             </div>
                           </div>
                           <span
@@ -673,8 +673,8 @@ export default function AdminDashboard() {
                         
                         {/* Customer Info */}
                         <div className="space-y-0.5 text-xs">
-                          <div className="text-gray-500 truncate">{req.email}</div>
-                          <div className="text-gray-400">{req.phone}</div>
+                          <div className="text-black truncate">{req.email}</div>
+                          <div className="text-black">{req.phone}</div>
                         </div>
                       </div>
                       
@@ -682,11 +682,11 @@ export default function AdminDashboard() {
                       <div className="px-4 py-3.5 space-y-3">
                         {/* Return Details */}
                         <div>
-                          <h4 className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-1.5">Return Details</h4>
+                          <h4 className="text-[10px] text-black uppercase tracking-wider font-medium mb-1.5">Return Details</h4>
                           <div className="space-y-1 text-xs">
                             <div className="text-gray-600">{req.reason}</div>
                             {req.comments && (
-                              <div className="text-gray-400 italic">{req.comments}</div>
+                              <div className="text-black italic">{req.comments}</div>
                             )}
                             {req.shopifyOrderData?.refundAmount && (
                               <div className="text-emerald-600 font-medium">
@@ -698,8 +698,8 @@ export default function AdminDashboard() {
                         
                         {/* Warehouse Address */}
                         <div>
-                          <h4 className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-1.5">Warehouse</h4>
-                          <div className="text-xs text-gray-500">
+                          <h4 className="text-[10px] text-black uppercase tracking-wider font-medium mb-1.5">Warehouse</h4>
+                          <div className="text-xs text-black">
                             <div>{req.warehouseAddress?.shipping_address || "Plot No 519, Roja Yaqubpur, Sec 16B"}</div>
                             <div>
                               {req.warehouseAddress?.shipping_city || "Greater Noida"}, {req.warehouseAddress?.shipping_state || "UP"} {req.warehouseAddress?.shipping_pincode || "201306"}
@@ -804,12 +804,12 @@ export default function AdminDashboard() {
                             className="rounded border-gray-200 text-[#96572A] focus:ring-[#96572A] h-4 w-4"
                           />
                         </th>
-                        <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Order / Customer</th>
-                        <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Items & Reason</th>
-                        <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Status</th>
-                        <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Warehouse</th>
-                        <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Video</th>
-                        <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Actions</th>
+                        <th className="px-4 py-3 text-left text-[10px] font-semibold text-black uppercase tracking-wider">Order / Customer</th>
+                        <th className="px-4 py-3 text-left text-[10px] font-semibold text-black uppercase tracking-wider">Items & Reason</th>
+                        <th className="px-4 py-3 text-left text-[10px] font-semibold text-black uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-3 text-left text-[10px] font-semibold text-black uppercase tracking-wider">Warehouse</th>
+                        <th className="px-4 py-3 text-left text-[10px] font-semibold text-black uppercase tracking-wider">Video</th>
+                        <th className="px-4 py-3 text-left text-[10px] font-semibold text-black uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -835,11 +835,11 @@ export default function AdminDashboard() {
                             </td>
                             <td className="px-4 py-3">
                               <div className="font-medium text-gray-800 text-sm">{req.orderId}</div>
-                              <div className="text-xs text-gray-400">{req.customerName}</div>
-                              <div className="text-[10px] text-gray-300">{req.email}</div>
-                              <div className="text-[10px] text-gray-300">{req.phone}</div>
+                              <div className="text-xs text-black">{req.customerName}</div>
+                              <div className="text-[10px] text-black">{req.email}</div>
+                              <div className="text-[10px] text-black">{req.phone}</div>
                               {req.pincode && (
-                                <div className="text-[10px] text-gray-300">PIN: {req.pincode}</div>
+                                <div className="text-[10px] text-black">PIN: {req.pincode}</div>
                               )}
                             </td>
                             <td className="px-4 py-3">
@@ -848,9 +848,9 @@ export default function AdminDashboard() {
                                   <div key={i}>• {item.title}</div>
                                 ))}
                               </div>
-                              <div className="text-[10px] text-gray-400 mt-1">{req.reason}</div>
+                              <div className="text-[10px] text-black mt-1">{req.reason}</div>
                               {req.comments && (
-                                <div className="text-[10px] text-gray-300 mt-0.5 italic">{req.comments}</div>
+                                <div className="text-[10px] text-black mt-0.5 italic">{req.comments}</div>
                               )}
                               {req.shopifyOrderData?.refundAmount && (
                                 <div className="text-[10px] text-emerald-600 mt-1 font-medium">
@@ -871,7 +871,7 @@ export default function AdminDashboard() {
                                 {status}
                               </span>
                               {req.shiprocketAwb && (
-                                <div className="text-[10px] text-gray-400 mt-1">AWB: {req.shiprocketAwb}</div>
+                                <div className="text-[10px] text-black mt-1">AWB: {req.shiprocketAwb}</div>
                               )}
                               {req.rejectionReason && (
                                 <div className="text-[10px] text-red-500 mt-1">{req.rejectionReason}</div>
@@ -881,7 +881,7 @@ export default function AdminDashboard() {
                               <div className="text-xs text-gray-600">
                                 {req.warehouseAddress?.shipping_address || "Plot No 519, Roja Yaqubpur, Sec 16B"}
                               </div>
-                              <div className="text-[10px] text-gray-400">
+                              <div className="text-[10px] text-black">
                                 {req.warehouseAddress?.shipping_city || "Greater Noida"}, {req.warehouseAddress?.shipping_state || "UP"} {req.warehouseAddress?.shipping_pincode || "201306"}
                               </div>
                               <button
@@ -911,7 +911,7 @@ export default function AdminDashboard() {
                                   View
                                 </a>
                               ) : (
-                                <span className="text-gray-300 text-xs">—</span>
+                                <span className="text-black text-xs">—</span>
                               )}
                             </td>
                             <td className="px-4 py-3">
@@ -983,8 +983,8 @@ export default function AdminDashboard() {
               </div>
               <h2 className="text-base font-semibold text-gray-900">Approve Return</h2>
             </div>
-            <p className="text-xs text-gray-500 mb-5">
-              This will create an RTO, generate a label, and email the customer for order <strong className="text-gray-700">{approveModal.request.orderId}</strong>.
+            <p className="text-xs text-black mb-5">
+              This will create a return, generate a label, and email the customer for order <strong className="text-gray-700">{approveModal.request.orderId}</strong>.
             </p>
             <div className="flex gap-3 justify-end">
               <button
@@ -998,7 +998,7 @@ export default function AdminDashboard() {
                 disabled={processingId === approveModal.request.id}
                 className="px-5 py-2 bg-emerald-600 text-white rounded-full hover:bg-emerald-700 disabled:opacity-60 text-sm font-medium transition-colors"
               >
-                {processingId === approveModal.request.id ? "Processing…" : "Approve & Create RTO"}
+                {processingId === approveModal.request.id ? "Processing…" : "Approve & Create Return"}
               </button>
             </div>
           </div>
@@ -1017,11 +1017,11 @@ export default function AdminDashboard() {
               </div>
               <h2 className="text-base font-semibold text-gray-900">Reject Return</h2>
             </div>
-            <p className="text-xs text-gray-500 mb-4">
+            <p className="text-xs text-black mb-4">
               Reject return for order <strong className="text-gray-700">{rejectModal.request.orderId}</strong>.
             </p>
             <div className="mb-5">
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Reason (optional)</label>
+              <label className="block text-xs font-medium text-black uppercase tracking-wider mb-1.5">Reason (optional)</label>
               <textarea
                 value={rejectModal.reason}
                 onChange={(e) => setRejectModal((m) => ({ ...m, reason: e.target.value }))}
@@ -1060,12 +1060,12 @@ export default function AdminDashboard() {
               </div>
               <h2 className="text-base font-semibold text-gray-900">Edit Warehouse Address</h2>
             </div>
-            <p className="text-xs text-gray-500 mb-5">
+            <p className="text-xs text-black mb-5">
               Update warehouse address for order <strong className="text-gray-700">{warehouseModal.request.orderId}</strong>. Used when creating the return shipment.
             </p>
             <div className="space-y-3.5">
               <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Warehouse Name</label>
+                <label className="block text-xs font-medium text-black uppercase tracking-wider mb-1.5">Warehouse Name</label>
                 <input
                   type="text"
                   value={warehouseModal.address.shipping_customer_name || ""}
@@ -1075,7 +1075,7 @@ export default function AdminDashboard() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Address Line 1</label>
+                <label className="block text-xs font-medium text-black uppercase tracking-wider mb-1.5">Address Line 1</label>
                 <input
                   type="text"
                   value={warehouseModal.address.shipping_address || ""}
@@ -1085,7 +1085,7 @@ export default function AdminDashboard() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Address Line 2</label>
+                <label className="block text-xs font-medium text-black uppercase tracking-wider mb-1.5">Address Line 2</label>
                 <input
                   type="text"
                   value={warehouseModal.address.shipping_address_2 || ""}
@@ -1096,7 +1096,7 @@ export default function AdminDashboard() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">City</label>
+                  <label className="block text-xs font-medium text-black uppercase tracking-wider mb-1.5">City</label>
                   <input
                     type="text"
                     value={warehouseModal.address.shipping_city || ""}
@@ -1106,7 +1106,7 @@ export default function AdminDashboard() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">State</label>
+                  <label className="block text-xs font-medium text-black uppercase tracking-wider mb-1.5">State</label>
                   <input
                     type="text"
                     value={warehouseModal.address.shipping_state || ""}
@@ -1118,7 +1118,7 @@ export default function AdminDashboard() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Pincode</label>
+                  <label className="block text-xs font-medium text-black uppercase tracking-wider mb-1.5">Pincode</label>
                   <input
                     type="text"
                     value={warehouseModal.address.shipping_pincode || ""}
@@ -1128,7 +1128,7 @@ export default function AdminDashboard() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Phone</label>
+                  <label className="block text-xs font-medium text-black uppercase tracking-wider mb-1.5">Phone</label>
                   <input
                     type="text"
                     value={warehouseModal.address.shipping_phone || ""}

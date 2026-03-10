@@ -540,8 +540,16 @@ export default function ReturnPortal() {
   const checkEligibility = (item, order) => {
     if (!order) return { eligible: false, reason: "Order data missing" };
 
-    // 1. Determine if delivered/fulfilled
-    // Handle both REST (lowercase) and GraphQL (uppercase) status values
+    // Use backend-computed delivery status (from Shiprocket / Shopify fallback)
+    const deliveryStatus = order.delivery_status;
+    if (deliveryStatus) {
+      return {
+        eligible: !!deliveryStatus.is_returnable,
+        reason: deliveryStatus.is_returnable ? null : (deliveryStatus.eligibility_reason || deliveryStatus.message || "Not eligible for return")
+      };
+    }
+
+    // Fallback if delivery_status not present
     const status = (order.displayFulfillmentStatus || order.fulfillment_status || '').toUpperCase();
     const isFulfilled = 
       status === 'FULFILLED' || 
@@ -557,11 +565,8 @@ export default function ReturnPortal() {
       };
     }
 
-    // 2. Calculate the 5-day window securely
-    // Fallback chain: fulfillment date → order creation date
+    // Calculate the 3-day window as last resort
     let deliveryDateString = order.created_at || order.createdAt;
-
-    // Safely extract from GraphQL edges or flat array
     if (order.fulfillments?.edges?.[0]?.node?.createdAt) {
       deliveryDateString = order.fulfillments.edges[0].node.createdAt;
     } else if (Array.isArray(order.fulfillments) && order.fulfillments[0]?.created_at) {
@@ -572,18 +577,12 @@ export default function ReturnPortal() {
 
     const deliveryDate = new Date(deliveryDateString || new Date());
     const today = new Date();
-
-    // Reset times to midnight to avoid timezone/hour math errors
     deliveryDate.setHours(0, 0, 0, 0);
     today.setHours(0, 0, 0, 0);
-
     const daysSinceDelivery = Math.floor((today.getTime() - deliveryDate.getTime()) / (1000 * 60 * 60 * 24));
 
     if (daysSinceDelivery > 3) {
-      return {
-        eligible: false,
-        reason: "Return window closed"
-      };
+      return { eligible: false, reason: "Return window closed" };
     }
 
     return { eligible: true, reason: null };
@@ -636,7 +635,6 @@ export default function ReturnPortal() {
     const deliveryMessage = String(order.delivery_status?.message || '');
     if (
       deliveryMessage === 'Delivered'
-      || deliveryMessage === 'Eligible for Return'
       || deliveryMessage === 'Delivered (Date Unknown)'
       || deliveryMessage === 'Return Window Closed'
     ) {
@@ -715,7 +713,6 @@ export default function ReturnPortal() {
     const isShipped = isFulfilled || fulfillmentStatus === 'PARTIAL' || fulfillmentStatus === 'IN_PROGRESS'
       || (Array.isArray(order.fulfillments) && order.fulfillments.length > 0 && order.fulfillments[0]?.status === 'success');
     const isDelivered = isFulfilled
-      || (order.delivery_status?.message === 'Eligible for Return')
       || (order.delivery_status?.message === 'Delivered')
       || (order.delivery_status?.message === 'Return Window Closed')
       || (order.delivery_status?.message === 'Delivered (Date Unknown)');
@@ -723,6 +720,7 @@ export default function ReturnPortal() {
     const editWindow = canEditOrder(order);
     const cancelWindow = canCancelOrder(order);
     const eligibility = checkEligibility((order.line_items || [])[0], order);
+    const hasReachedReturnLimit = returnHistory.length >= 2;
     const hasReturnableItems = (order.line_items || []).some(item => {
       const elig = checkEligibility(item, order);
       return elig.eligible && !isItemAlreadyReturned(item);
@@ -763,6 +761,9 @@ export default function ReturnPortal() {
     } else if (!isDelivered) {
       returnAction.enabled = false;
       returnAction.reason = 'Order must be delivered before a return can be requested';
+    } else if (hasReachedReturnLimit) {
+      returnAction.enabled = false;
+      returnAction.reason = 'You have reached the maximum limit of 2 return requests';
     } else if (!hasReturnableItems) {
       returnAction.enabled = false;
       returnAction.reason = eligibility.reason || 'No items eligible for return';
@@ -794,6 +795,11 @@ export default function ReturnPortal() {
       setEditedZip(order.shipping_address?.zip || "");
       setEditedPhone(order.phone || order.shipping_address?.phone || "");
     } else if (action === 'return') {
+      if (returnHistory.length >= 2) {
+        setError("You have reached the maximum limit of 2 return requests. Please contact support@satmi.in for further assistance.");
+        return;
+      }
+
       markOrderEligibilityChecked(order);
 
       // Auto-select all eligible items from this order
@@ -1019,6 +1025,12 @@ export default function ReturnPortal() {
     if (!userEmail) { setError("Please enter your email address."); return; }
     if (!videoFile) { setError("Please upload a video of the product(s) before submitting."); return; }
 
+    // Limit: max 2 return requests per person (includes rejected requests)
+    if (returnHistory.length >= 2) {
+      setError("You have reached the maximum limit of 2 return requests. Please contact support@satmi.in for further assistance.");
+      return;
+    }
+
     setUploading(true);
     setError("");
     setSuccessMessage("");
@@ -1079,6 +1091,7 @@ export default function ReturnPortal() {
         const errorMessages = {
           'VALIDATION_ERROR': 'Invalid request format. Please check your input.',
           'DUPLICATE_RETURN': 'Some items have already been returned. Please select different items.',
+          'RETURN_LIMIT_REACHED': 'You have reached the maximum limit of 2 return requests. Please contact support@satmi.in for further assistance.',
           'MISSING_LINE_ITEM_IDS': 'Invalid item selection. Please try again.',
           'FIRESTORE_ERROR': 'Failed to save return request. Please try again.',
           'INTERNAL_ERROR': 'Server error. Please try again later.'
@@ -1718,7 +1731,10 @@ export default function ReturnPortal() {
                           
                           {/* Line Items */}
                           <div className="px-5 py-3 space-y-2.5">
-                            {(order.line_items || order.lineItems?.edges?.map(e => e.node) || []).map((item, index) => {
+                            {(order.line_items || order.lineItems?.edges?.map(e => e.node) || []).filter(item => {
+                              const itemName = (item.name || item.title || item.node?.title || '').toLowerCase();
+                              return !itemName.includes('5 mukhi rudraksha');
+                            }).map((item, index) => {
                               const eligibilityChecked = isOrderEligibilityChecked(order);
                               const eligibility = eligibilityChecked ? checkEligibility(item, order) : { eligible: false, reason: null };
                               const itemId = item.node?.id || item.id;
@@ -1765,15 +1781,11 @@ export default function ReturnPortal() {
                                           ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
                                           : itemReturnStatus === 'RETURN_REQUESTED'
                                             ? "bg-blue-50 text-blue-600 border border-blue-200"
-                                            : eligibilityChecked && eligibility.eligible
-                                              ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
-                                              : "bg-gray-50 text-gray-400 border border-gray-200"
+                                            : "bg-gray-50 text-gray-400 border border-gray-200"
                                     }`}>
                                       {itemReturnStatus === 'RETURNED' ? "Returned" :
                                        itemReturnStatus === 'RETURN_APPROVED' ? "Return Approved" :
                                        itemReturnStatus === 'RETURN_REQUESTED' ? "Return Requested" :
-                                       eligibilityChecked && eligibility.eligible ? "Eligible" :
-                                       eligibilityChecked && eligibility.reason === "Return window closed" ? "Window Closed" :
                                        baseOrderStatus}
                                     </span>
                                   </div>
@@ -1804,7 +1816,10 @@ export default function ReturnPortal() {
                           </thead>
                           <tbody>
                             {orders.map((order) => 
-                              (order.line_items || []).map((item, index) => {
+                              (order.line_items || []).filter(item => {
+                                const itemName = (item.name || item.title || '').toLowerCase();
+                                return !itemName.includes('5 mukhi rudraksha');
+                              }).map((item, index) => {
                                 const eligibilityChecked = isOrderEligibilityChecked(order);
                                 const eligibility = eligibilityChecked ? checkEligibility(item, order) : { eligible: false, reason: null };
                                 const itemId = item.id;
@@ -1855,15 +1870,11 @@ export default function ReturnPortal() {
                                             ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
                                             : itemReturnStatus === 'RETURN_REQUESTED'
                                               ? "bg-blue-50 text-blue-600 border border-blue-200"
-                                              : eligibilityChecked && eligibility.eligible
-                                                ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
-                                                : "bg-gray-50 text-gray-400 border border-gray-200"
+                                              : "bg-gray-50 text-gray-400 border border-gray-200"
                                       }`}>
                                         {itemReturnStatus === 'RETURNED' ? "Returned" :
                                          itemReturnStatus === 'RETURN_APPROVED' ? "Return Approved" :
                                          itemReturnStatus === 'RETURN_REQUESTED' ? "Return Requested" :
-                                         eligibilityChecked && eligibility.eligible ? "Eligible" :
-                                         eligibilityChecked && eligibility.reason === "Return window closed" ? "Closed" :
                                          baseOrderStatus}
                                       </span>
                                     </td>
@@ -2030,6 +2041,14 @@ export default function ReturnPortal() {
                         </p>
                       </div>
                     )}
+
+                    {getNormalizedReturnWorkflowStatus(returnRequest) === 'RETURN_APPROVED' && (
+                      <div className="mt-3 p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                        <p className="text-xs text-emerald-700">
+                          Return approved and the return label will be mailed to your registered mail id.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ))
               ) : (
@@ -2147,9 +2166,20 @@ export default function ReturnPortal() {
                   <input 
                     type="file" 
                     accept="video/*" 
-                    onChange={(e) => setVideoFile(e.target.files[0])} 
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file && file.size > 50 * 1024 * 1024) {
+                        setError("Video file size must be under 50MB. Please upload a smaller file.");
+                        e.target.value = '';
+                        setVideoFile(null);
+                        return;
+                      }
+                      setError("");
+                      setVideoFile(file || null);
+                    }} 
                     className="w-full border border-gray-200 px-4 py-3 rounded-xl text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] transition-colors file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-medium file:bg-[#F9F6F2] file:text-[#96572A]"
                   />
+                  <p className="text-[10px] text-gray-400 mt-1">Max file size: 50MB</p>
                 </div>
               </div>
 
