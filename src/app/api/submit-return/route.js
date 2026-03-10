@@ -35,9 +35,14 @@ async function checkExistingReturns(orderId, lineItemIds) {
     const querySnapshot = await getDocs(returnsQuery);
     const existingReturns = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     
-    // Check if any of the selected line item IDs have already been returned
+    // Check if any selected line items already have an active return workflow.
     const existingLineItemIds = new Set();
     existingReturns.forEach(returnDoc => {
+      const workflow = String(returnDoc.workflowStatus || '').toUpperCase();
+      const legacy = String(returnDoc.status || '').toLowerCase();
+      const isRejected = workflow === 'RETURN_REJECTED' || legacy === 'rejected';
+      if (isRejected) return;
+
       if (returnDoc.items && Array.isArray(returnDoc.items)) {
         returnDoc.items.forEach(item => {
           if (item.lineItemId) {
@@ -286,6 +291,7 @@ export async function POST(request) {
         videoUrl, // This is now the public URL from Firebase Storage
         originalCourier,
         status: "Pending",
+        workflowStatus: "RETURN_REQUESTED",
         createdAt: serverTimestamp(),
         // Shopify order details
         shopifyOrderData: {

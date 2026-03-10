@@ -39,6 +39,8 @@ export default function ReturnPortal() {
 
   // DUPLICATE RETURN TRACKING STATE
   const [returnedLineItemIds, setReturnedLineItemIds] = useState(new Set());
+  const [returnStatusByLineItemId, setReturnStatusByLineItemId] = useState({});
+  const [eligibilityCheckedOrders, setEligibilityCheckedOrders] = useState(new Set());
   const [duplicateReturnWarning, setDuplicateReturnWarning] = useState("");
 
   // CANCELLATION STATE
@@ -48,6 +50,7 @@ export default function ReturnPortal() {
 
   // MENU & NAVIGATION STATE
   const [openKebabMenu, setOpenKebabMenu] = useState(null); // Track which order's menu is open
+  const [kebabMenuPosition, setKebabMenuPosition] = useState({ top: 0, left: 0 });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [accountDropdownOpen, setAccountDropdownOpen] = useState(false);
   
@@ -102,6 +105,19 @@ export default function ReturnPortal() {
       });
     }
   }, []);
+
+  useEffect(() => {
+    if (!openKebabMenu) return;
+
+    const closeMenu = () => setOpenKebabMenu(null);
+    window.addEventListener('resize', closeMenu);
+    window.addEventListener('scroll', closeMenu, true);
+
+    return () => {
+      window.removeEventListener('resize', closeMenu);
+      window.removeEventListener('scroll', closeMenu, true);
+    };
+  }, [openKebabMenu]);
 
   // Phone number validation
   const validatePhoneNumber = (phone) => {
@@ -372,18 +388,51 @@ export default function ReturnPortal() {
       const returns = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setReturnHistory(returns);
 
-      // Build a set of all line item IDs that already have returns
+      // Build active return IDs and a per-line-item workflow status map.
       const returnedIds = new Set();
+      const statusMap = {};
+      const statusRank = {
+        RETURN_REQUESTED: 1,
+        RETURN_APPROVED: 2,
+        RETURNED: 3,
+      };
+
+      const normalizeWorkflowStatus = (returnDoc) => {
+        const workflow = String(returnDoc.workflowStatus || "").toUpperCase();
+        if (workflow === 'RETURN_REQUESTED' || workflow === 'RETURN_APPROVED' || workflow === 'RETURNED' || workflow === 'RETURN_REJECTED') {
+          return workflow;
+        }
+
+        const legacy = String(returnDoc.status || "").toLowerCase();
+        if (legacy === 'approved') return 'RETURN_APPROVED';
+        if (legacy === 'rejected') return 'RETURN_REJECTED';
+        if (legacy === 'returned') return 'RETURNED';
+        return 'RETURN_REQUESTED';
+      };
+
       returns.forEach(returnDoc => {
+        const workflowStatus = normalizeWorkflowStatus(returnDoc);
         if (returnDoc.items && Array.isArray(returnDoc.items)) {
           returnDoc.items.forEach(item => {
             if (item.lineItemId) {
-              returnedIds.add(item.lineItemId);
+              const key = String(item.lineItemId);
+
+              if (workflowStatus !== 'RETURN_REJECTED') {
+                returnedIds.add(key);
+              }
+
+              const prev = statusMap[key];
+              const prevRank = prev ? (statusRank[prev] || 0) : 0;
+              const nextRank = statusRank[workflowStatus] || 0;
+              if (nextRank >= prevRank && nextRank > 0) {
+                statusMap[key] = workflowStatus;
+              }
             }
           });
         }
       });
       setReturnedLineItemIds(returnedIds);
+      setReturnStatusByLineItemId(statusMap);
     } catch (err) {
       console.error("Error fetching return history:", err);
     } finally {
@@ -508,7 +557,7 @@ export default function ReturnPortal() {
       };
     }
 
-    // 2. Calculate the 3-day window securely
+    // 2. Calculate the 5-day window securely
     // Fallback chain: fulfillment date → order creation date
     let deliveryDateString = order.created_at || order.createdAt;
 
@@ -540,10 +589,100 @@ export default function ReturnPortal() {
     return { eligible: true, reason: null };
   };
 
+  const getLineItemReturnStatus = (item) => {
+    const itemId = item.node?.id || item.id;
+    return returnStatusByLineItemId[String(itemId)] || null;
+  };
+
+  const getNormalizedReturnWorkflowStatus = (returnDoc) => {
+    const workflow = String(returnDoc?.workflowStatus || '').toUpperCase();
+    if (workflow === 'RETURN_REQUESTED' || workflow === 'RETURN_APPROVED' || workflow === 'RETURNED' || workflow === 'RETURN_REJECTED') {
+      return workflow;
+    }
+
+    const legacy = String(returnDoc?.status || '').toLowerCase();
+    if (legacy === 'approved') return 'RETURN_APPROVED';
+    if (legacy === 'rejected') return 'RETURN_REJECTED';
+    if (legacy === 'returned') return 'RETURNED';
+    return 'RETURN_REQUESTED';
+  };
+
   // Check if a specific line item already has an existing return
   const isItemAlreadyReturned = (item) => {
     const itemId = item.node?.id || item.id;
     return returnedLineItemIds.has(String(itemId));
+  };
+
+  const isOrderEligibilityChecked = (order) => {
+    const key = String(order.id || order.name || '');
+    return eligibilityCheckedOrders.has(key);
+  };
+
+  const markOrderEligibilityChecked = (order) => {
+    const key = String(order.id || order.name || '');
+    if (!key) return;
+
+    setEligibilityCheckedOrders((prev) => {
+      if (prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+  };
+
+  const getBaseOrderStatus = (order) => {
+    if (order.cancelled_at) return 'Cancelled';
+
+    const deliveryMessage = String(order.delivery_status?.message || '');
+    if (
+      deliveryMessage === 'Delivered'
+      || deliveryMessage === 'Eligible for Return'
+      || deliveryMessage === 'Delivered (Date Unknown)'
+      || deliveryMessage === 'Return Window Closed'
+    ) {
+      return 'Delivered';
+    }
+
+    if (deliveryMessage.toLowerCase().includes('in transit') || deliveryMessage.toLowerCase().includes('out for delivery')) {
+      return 'Out for Delivery';
+    }
+
+    const fulfillmentStatus = String(order.fulfillment_status || order.displayFulfillmentStatus || '').toLowerCase();
+    if (fulfillmentStatus === 'fulfilled' || fulfillmentStatus === 'partial' || fulfillmentStatus === 'in_progress') {
+      return 'Shipped';
+    }
+
+    return 'Processing';
+  };
+
+  const toggleKebabMenu = (event, orderId) => {
+    event.stopPropagation();
+
+    if (openKebabMenu === orderId) {
+      setOpenKebabMenu(null);
+      return;
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuWidth = 208;
+    const viewportWidth = window.innerWidth;
+    const left = Math.max(8, Math.min(rect.right - menuWidth, viewportWidth - menuWidth - 8));
+    const top = rect.bottom + 6;
+
+    setKebabMenuPosition({ top, left });
+    setOpenKebabMenu(orderId);
+  };
+
+  const handleMenuActionClick = (order, action, actionConfig) => {
+    setOpenKebabMenu(null);
+
+    if (!actionConfig?.enabled) {
+      setSuccessMessage('');
+      setError(actionConfig?.reason || 'This action is not available for this order.');
+      return;
+    }
+
+    handleOrderAction(order, action);
   };
 
   // --- 3-HOUR EDIT WINDOW HELPER ---
@@ -655,6 +794,8 @@ export default function ReturnPortal() {
       setEditedZip(order.shipping_address?.zip || "");
       setEditedPhone(order.phone || order.shipping_address?.phone || "");
     } else if (action === 'return') {
+      markOrderEligibilityChecked(order);
+
       // Auto-select all eligible items from this order
       const eligibleItems = (order.line_items || []).filter(item => {
         const eligibility = checkEligibility(item, order);
@@ -760,6 +901,13 @@ export default function ReturnPortal() {
     }
     setDuplicateReturnWarning("");
 
+    markOrderEligibilityChecked(order);
+    const eligibility = checkEligibility(item, order);
+    if (!eligibility.eligible) {
+      setError(eligibility.reason || "This item is not eligible for return.");
+      return;
+    }
+
     // Create a unique identifier for this specific line item within this specific order
     const orderIdentifier = order.name || order.orderNumber || order.id;
     // Handle both GraphQL 'node' structure and flat REST structure
@@ -828,29 +976,11 @@ export default function ReturnPortal() {
   };
 
   const handleSelectOrder = (order) => {
-    // Check if order has been delivered - fix the delivery status check
-    const isDelivered = order.fulfillments && order.fulfillments.length > 0;
-    
-    if (!isDelivered) {
-      setError("This order hasn't been delivered yet. Returns are only available for delivered orders.");
-      return;
-    }
-    
-    // Check return window (15 days from fulfillment date)
-    const fulfillmentDate = order.fulfillments?.[0]?.createdAt ? new Date(order.fulfillments[0].createdAt) : new Date(order.created_at);
-    const daysSinceFulfillment = Math.floor((new Date() - fulfillmentDate) / (1000 * 60 * 60 * 24));
-    const isReturnWindowClosed = daysSinceFulfillment > 15;
-    
+    markOrderEligibilityChecked(order);
+
     const returnableItems = order.line_items?.filter((item) => {
-      // Check if item is already returned (use returnHistory state)
-      const isAlreadyReturned = returnHistory.some(returnReq => 
-        returnReq.items?.some(returnItem => returnItem.lineItemId === item.id)
-      );
-      
-      // Check if return window is closed
-      const itemReturnWindowClosed = daysSinceFulfillment > 15;
-      
-      return !isAlreadyReturned && !itemReturnWindowClosed;
+      const eligibility = checkEligibility(item, order);
+      return eligibility.eligible && !isItemAlreadyReturned(item);
     }) || [];
     
     if (returnableItems.length === 0) {
@@ -875,6 +1005,8 @@ export default function ReturnPortal() {
         customerName: order.customer ? `${order.customer.first_name} ${order.customer.last_name}` : 'Guest',
         title: item.name,
         price: item.price,
+        quantity: item.quantity || 1,
+        id: item.id,
         lineItemId: item.id, // Add line item ID for tracking
       }));
       setSelectedItems([...selectedItems, ...newItems]);
@@ -1481,10 +1613,7 @@ export default function ReturnPortal() {
                               {/* Actions Menu */}
                               <div className="relative">
                                 <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setOpenKebabMenu(openKebabMenu === order.id ? null : order.id);
-                                  }}
+                                  onClick={(e) => toggleKebabMenu(e, order.id)}
                                   className="p-1.5 rounded-full hover:bg-gray-50 transition-colors"
                                   title="Actions"
                                 >
@@ -1497,13 +1626,12 @@ export default function ReturnPortal() {
                                   const actions = getOrderActions(order);
                                   return (
                                   <>
-                                    <div className="fixed inset-0 z-10" onClick={() => setOpenKebabMenu(null)} />
-                                    <div className="absolute right-0 mt-1 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-20">
+                                    <div className="fixed inset-0 z-40" onClick={() => setOpenKebabMenu(null)} />
+                                    <div className="fixed w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-50" style={{ top: kebabMenuPosition.top, left: kebabMenuPosition.left }}>
                                       {/* Modify Order */}
                                       <div className="relative group">
                                         <button
-                                          onClick={() => actions.modify.enabled && handleOrderAction(order, 'modify')}
-                                          disabled={!actions.modify.enabled}
+                                          onClick={() => handleMenuActionClick(order, 'modify', actions.modify)}
                                           className={`w-full text-left px-4 py-2.5 text-sm flex items-center space-x-2.5 transition-colors ${
                                             actions.modify.enabled
                                               ? 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 cursor-pointer'
@@ -1525,8 +1653,7 @@ export default function ReturnPortal() {
                                       {/* Cancel Order */}
                                       <div className="relative group">
                                         <button
-                                          onClick={() => actions.cancel.enabled && handleOrderAction(order, 'cancel')}
-                                          disabled={!actions.cancel.enabled}
+                                          onClick={() => handleMenuActionClick(order, 'cancel', actions.cancel)}
                                           className={`w-full text-left px-4 py-2.5 text-sm flex items-center space-x-2.5 transition-colors ${
                                             actions.cancel.enabled
                                               ? 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 cursor-pointer'
@@ -1549,8 +1676,7 @@ export default function ReturnPortal() {
                                       {actions.return.visible && (
                                         <div className="relative group">
                                           <button
-                                            onClick={() => actions.return.enabled && handleOrderAction(order, 'return')}
-                                            disabled={!actions.return.enabled}
+                                            onClick={() => handleMenuActionClick(order, 'return', actions.return)}
                                             className={`w-full text-left px-4 py-2.5 text-sm flex items-center space-x-2.5 transition-colors ${
                                               actions.return.enabled
                                                 ? 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 cursor-pointer'
@@ -1593,11 +1719,14 @@ export default function ReturnPortal() {
                           {/* Line Items */}
                           <div className="px-5 py-3 space-y-2.5">
                             {(order.line_items || order.lineItems?.edges?.map(e => e.node) || []).map((item, index) => {
-                              const eligibility = checkEligibility(item, order);
+                              const eligibilityChecked = isOrderEligibilityChecked(order);
+                              const eligibility = eligibilityChecked ? checkEligibility(item, order) : { eligible: false, reason: null };
                               const itemId = item.node?.id || item.id;
                               const isSelected = globalSelectedItems.some(i => i.uniqueId === `${order.name}-${itemId}`);
-                              const alreadyReturned = isItemAlreadyReturned(item);
-                              const isDisabled = !eligibility.eligible || alreadyReturned;
+                              const itemReturnStatus = getLineItemReturnStatus(item);
+                              const alreadyReturned = !!itemReturnStatus;
+                              const isDisabled = alreadyReturned || (eligibilityChecked && !eligibility.eligible);
+                              const baseOrderStatus = getBaseOrderStatus(order);
                               const thumbSrc = item.image?.src || item.image?.url || item.node?.image?.url || null;
                               
                               return (
@@ -1630,19 +1759,22 @@ export default function ReturnPortal() {
                                   {/* Status */}
                                   <div className="text-right shrink-0">
                                     <span className={`inline-flex px-2 py-0.5 text-[10px] font-medium rounded-full tracking-wide ${
-                                      alreadyReturned
+                                      itemReturnStatus === 'RETURNED'
                                         ? "bg-amber-50 text-amber-600 border border-amber-200"
-                                        : eligibility.eligible
-                                          ? "bg-emerald-50 text-emerald-600 border border-emerald-200" 
-                                          : "bg-gray-50 text-gray-400 border border-gray-200"
+                                        : itemReturnStatus === 'RETURN_APPROVED'
+                                          ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+                                          : itemReturnStatus === 'RETURN_REQUESTED'
+                                            ? "bg-blue-50 text-blue-600 border border-blue-200"
+                                            : eligibilityChecked && eligibility.eligible
+                                              ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+                                              : "bg-gray-50 text-gray-400 border border-gray-200"
                                     }`}>
-                                      {alreadyReturned ? "Returned" :
-                                       order.cancelled_at ? "Cancelled" :
-                                       eligibility.eligible ? "Eligible" : 
-                                       eligibility.reason === "Return window closed" ? "Window Closed" :
-                                       order.delivery_status?.message === "Delivered" || order.delivery_status?.message === "Eligible for Return" || order.delivery_status?.message === "Delivered (Date Unknown)" ? "Delivered" :
-                                       order.fulfillment_status === "fulfilled" || order.fulfillment_status === "partial" ? "Shipped" :
-                                       "Processing"}
+                                      {itemReturnStatus === 'RETURNED' ? "Returned" :
+                                       itemReturnStatus === 'RETURN_APPROVED' ? "Return Approved" :
+                                       itemReturnStatus === 'RETURN_REQUESTED' ? "Return Requested" :
+                                       eligibilityChecked && eligibility.eligible ? "Eligible" :
+                                       eligibilityChecked && eligibility.reason === "Return window closed" ? "Window Closed" :
+                                       baseOrderStatus}
                                     </span>
                                   </div>
                                 </div>
@@ -1656,7 +1788,7 @@ export default function ReturnPortal() {
 
                   {/* Table View */}
                   {viewMode === "table" && (
-                    <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                    <div className="bg-white rounded-xl border border-gray-100 overflow-visible">
                       <div className="overflow-x-auto">
                         <table className="w-full">
                           <thead>
@@ -1673,11 +1805,14 @@ export default function ReturnPortal() {
                           <tbody>
                             {orders.map((order) => 
                               (order.line_items || []).map((item, index) => {
-                                const eligibility = checkEligibility(item, order);
+                                const eligibilityChecked = isOrderEligibilityChecked(order);
+                                const eligibility = eligibilityChecked ? checkEligibility(item, order) : { eligible: false, reason: null };
                                 const itemId = item.id;
                                 const isSelected = globalSelectedItems.some(i => i.uniqueId === `${order.name}-${itemId}`);
-                                const alreadyReturned = isItemAlreadyReturned(item);
-                                const isDisabled = !eligibility.eligible || alreadyReturned;
+                                const itemReturnStatus = getLineItemReturnStatus(item);
+                                const alreadyReturned = !!itemReturnStatus;
+                                const isDisabled = alreadyReturned || (eligibilityChecked && !eligibility.eligible);
+                                const baseOrderStatus = getBaseOrderStatus(order);
                                 
                                 return (
                                   <tr key={`${order.name}-${itemId || index}`} className={`border-b border-gray-50 last:border-0 transition-colors ${alreadyReturned ? 'bg-amber-50/40' : 'hover:bg-gray-50/50'}`}>
@@ -1714,29 +1849,29 @@ export default function ReturnPortal() {
                                     <td className="px-4 py-3.5 text-sm text-gray-600">₹{item.price}</td>
                                     <td className="px-4 py-3.5">
                                       <span className={`inline-flex px-2 py-0.5 text-[10px] font-medium rounded-full tracking-wide ${
-                                        alreadyReturned
+                                        itemReturnStatus === 'RETURNED'
                                           ? "bg-amber-50 text-amber-600 border border-amber-200"
-                                          : eligibility.eligible
-                                            ? "bg-emerald-50 text-emerald-600 border border-emerald-200" 
-                                            : "bg-gray-50 text-gray-400 border border-gray-200"
+                                          : itemReturnStatus === 'RETURN_APPROVED'
+                                            ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+                                            : itemReturnStatus === 'RETURN_REQUESTED'
+                                              ? "bg-blue-50 text-blue-600 border border-blue-200"
+                                              : eligibilityChecked && eligibility.eligible
+                                                ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+                                                : "bg-gray-50 text-gray-400 border border-gray-200"
                                       }`}>
-                                        {alreadyReturned ? "Returned" :
-                                         order.cancelled_at ? "Cancelled" :
-                                         eligibility.eligible ? "Eligible" : 
-                                         eligibility.reason === "Return window closed" ? "Closed" :
-                                         order.delivery_status?.message === "Delivered" || order.delivery_status?.message === "Eligible for Return" || order.delivery_status?.message === "Delivered (Date Unknown)" ? "Delivered" :
-                                         order.fulfillment_status === "fulfilled" || order.fulfillment_status === "partial" ? "Shipped" :
-                                         "Processing"}
+                                        {itemReturnStatus === 'RETURNED' ? "Returned" :
+                                         itemReturnStatus === 'RETURN_APPROVED' ? "Return Approved" :
+                                         itemReturnStatus === 'RETURN_REQUESTED' ? "Return Requested" :
+                                         eligibilityChecked && eligibility.eligible ? "Eligible" :
+                                         eligibilityChecked && eligibility.reason === "Return window closed" ? "Closed" :
+                                         baseOrderStatus}
                                       </span>
                                     </td>
                                     <td className="px-4 py-3.5">
                                       {index === 0 && (
                                         <div className="relative">
                                           <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setOpenKebabMenu(openKebabMenu === order.id ? null : order.id);
-                                            }}
+                                            onClick={(e) => toggleKebabMenu(e, order.id)}
                                             className="p-1.5 rounded-full hover:bg-gray-50 transition-colors"
                                           >
                                             <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
@@ -1748,13 +1883,12 @@ export default function ReturnPortal() {
                                             const actions = getOrderActions(order);
                                             return (
                                             <>
-                                              <div className="fixed inset-0 z-10" onClick={() => setOpenKebabMenu(null)} />
-                                              <div className="absolute right-0 mt-1 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-20">
+                                              <div className="fixed inset-0 z-40" onClick={() => setOpenKebabMenu(null)} />
+                                              <div className="fixed w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-50" style={{ top: kebabMenuPosition.top, left: kebabMenuPosition.left }}>
                                                 {/* Modify Order */}
                                                 <div className="relative group">
                                                   <button
-                                                    onClick={() => actions.modify.enabled && handleOrderAction(order, 'modify')}
-                                                    disabled={!actions.modify.enabled}
+                                                    onClick={() => handleMenuActionClick(order, 'modify', actions.modify)}
                                                     className={`w-full text-left px-4 py-2.5 text-sm flex items-center space-x-2.5 transition-colors ${
                                                       actions.modify.enabled
                                                         ? 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 cursor-pointer'
@@ -1776,8 +1910,7 @@ export default function ReturnPortal() {
                                                 {/* Cancel Order */}
                                                 <div className="relative group">
                                                   <button
-                                                    onClick={() => actions.cancel.enabled && handleOrderAction(order, 'cancel')}
-                                                    disabled={!actions.cancel.enabled}
+                                                    onClick={() => handleMenuActionClick(order, 'cancel', actions.cancel)}
                                                     className={`w-full text-left px-4 py-2.5 text-sm flex items-center space-x-2.5 transition-colors ${
                                                       actions.cancel.enabled
                                                         ? 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 cursor-pointer'
@@ -1800,8 +1933,7 @@ export default function ReturnPortal() {
                                                 {actions.return.visible && (
                                                   <div className="relative group">
                                                     <button
-                                                      onClick={() => actions.return.enabled && handleOrderAction(order, 'return')}
-                                                      disabled={!actions.return.enabled}
+                                                      onClick={() => handleMenuActionClick(order, 'return', actions.return)}
                                                       className={`w-full text-left px-4 py-2.5 text-sm flex items-center space-x-2.5 transition-colors ${
                                                         actions.return.enabled
                                                           ? 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 cursor-pointer'
@@ -1869,12 +2001,16 @@ export default function ReturnPortal() {
                         </p>
                       </div>
                       <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold tracking-wide border ${
-                        returnRequest.status === 'processing' ? 'bg-amber-50 text-amber-600 border-amber-200' :
-                        returnRequest.status === 'approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
-                        returnRequest.status === 'rejected' ? 'bg-red-50 text-red-500 border-red-200' :
+                        getNormalizedReturnWorkflowStatus(returnRequest) === 'RETURN_REQUESTED' ? 'bg-blue-50 text-blue-600 border-blue-200' :
+                        getNormalizedReturnWorkflowStatus(returnRequest) === 'RETURN_APPROVED' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
+                        getNormalizedReturnWorkflowStatus(returnRequest) === 'RETURN_REJECTED' ? 'bg-red-50 text-red-500 border-red-200' :
+                        getNormalizedReturnWorkflowStatus(returnRequest) === 'RETURNED' ? 'bg-amber-50 text-amber-600 border-amber-200' :
                         'bg-gray-50 text-gray-500 border-gray-200'
                       }`}>
-                        {returnRequest.status?.charAt(0).toUpperCase() + returnRequest.status?.slice(1) || 'Pending'}
+                        {getNormalizedReturnWorkflowStatus(returnRequest) === 'RETURN_REQUESTED' ? 'Return Requested' :
+                         getNormalizedReturnWorkflowStatus(returnRequest) === 'RETURN_APPROVED' ? 'Return Approved' :
+                         getNormalizedReturnWorkflowStatus(returnRequest) === 'RETURN_REJECTED' ? 'Return Rejected' :
+                         getNormalizedReturnWorkflowStatus(returnRequest) === 'RETURNED' ? 'Returned' : 'Pending'}
                       </span>
                     </div>
                     

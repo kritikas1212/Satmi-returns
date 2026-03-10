@@ -151,6 +151,7 @@ export default function AdminDashboard() {
           email: request.email,
           phone: request.phone,
           originalCourier: request.originalCourier,
+          approvedBy: user?.email || null,
         }),
       });
       let data;
@@ -163,20 +164,9 @@ export default function AdminDashboard() {
         throw new Error(data.error || "Approve failed");
       }
 
-      const returnRef = doc(db, "returns", request.id);
-      await updateDoc(returnRef, {
-        status: "Approved",
-        shiprocketAwb: data.awb || "PENDING",
-        shiprocketCourier: data.courier || "Unknown",
-        shiprocketShipmentId: data.shipmentId ?? null,
-        labelUrl: data.labelUrl ?? null,
-        approvedAt: new Date(),
-        approvedBy: user.email,
-      });
-
       setApproveModal({ open: false, request: null });
       if (data.labelUrl) window.open(data.labelUrl, "_blank");
-      alert(`RTO created. Label ${data.labelUrl ? "opened and " : ""}emailed to ${request.email}.`);
+      alert(`RTO created. Label ${data.labelUrl ? "opened and " : ""}${data.emailSent ? "approval email sent" : "approval email queued/failed"} for ${request.email}.`);
     } catch (error) {
       console.error("Approve error:", error);
       alert("Error: " + error.message);
@@ -192,6 +182,7 @@ export default function AdminDashboard() {
       const returnRef = doc(db, "returns", request.id);
       await updateDoc(returnRef, {
         status: "Rejected",
+        workflowStatus: "RETURN_REJECTED",
         rejectedAt: new Date(),
         rejectedBy: user.email,
         rejectionReason: reason?.trim() || null,
@@ -281,21 +272,13 @@ export default function AdminDashboard() {
             email: returnData.email,
             phone: returnData.phone,
             originalCourier: returnData.originalCourier,
+            approvedBy: user?.email || null,
           }),
         });
         
         const data = await res.json();
-        if (data.success) {
-          const returnRef = doc(db, "returns", returnId);
-          await updateDoc(returnRef, {
-            status: "Approved",
-            shiprocketAwb: data.awb || "PENDING",
-            shiprocketShipmentId: data.shipmentId,
-            shiprocketCourier: data.courier,
-            labelUrl: data.labelUrl,
-            approvedAt: new Date(),
-            approvedBy: user.email,
-          });
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || `Approval failed for return ${returnId}`);
         }
       });
       
@@ -325,6 +308,7 @@ export default function AdminDashboard() {
         const returnRef = doc(db, "returns", returnId);
         await updateDoc(returnRef, {
           status: "Rejected",
+          workflowStatus: "RETURN_REJECTED",
           rejectionReason: reason,
           rejectedAt: new Date(),
           rejectedBy: user.email,
