@@ -3,7 +3,12 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { db, auth } from "@/lib/firebaseConfig";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import {
+  onAuthStateChanged,
+  signOut,
+  setPersistence,
+  browserLocalPersistence,
+} from "firebase/auth";
 import {
   collection,
   query,
@@ -33,16 +38,52 @@ export default function AdminDashboard() {
   const [viewMode, setViewMode] = useState("cards"); // cards or table
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (currentUser && isAdminEmail(currentUser.email)) {
-        setUser(currentUser);
-      } else {
-        setUser(null);
-        if (!currentUser) router.replace("/admin/login");
+    let isMounted = true;
+    let unsubscribe = () => {};
+
+    const initAuth = async () => {
+      if (!auth) {
+        if (isMounted) {
+          setUser(null);
+          setLoading(false);
+          router.replace("/admin/login");
+        }
+        return;
       }
-      setLoading(false);
-    });
-    return () => unsubscribe();
+
+      try {
+        await setPersistence(auth, browserLocalPersistence);
+      } catch (err) {
+        console.error("[Admin] Failed to enforce auth persistence:", err);
+      }
+
+      if (typeof auth.authStateReady === "function") {
+        try {
+          await auth.authStateReady();
+        } catch (err) {
+          console.error("[Admin] Failed waiting for auth state readiness:", err);
+        }
+      }
+
+      if (!isMounted) return;
+
+      unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+        if (currentUser && isAdminEmail(currentUser.email)) {
+          setUser(currentUser);
+        } else {
+          setUser(null);
+          router.replace("/admin/login");
+        }
+        setLoading(false);
+      });
+    };
+
+    initAuth();
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, [router]);
 
   useEffect(() => {

@@ -4,7 +4,12 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/firebaseConfig";
-import { signInWithEmailAndPassword, onAuthStateChanged } from "firebase/auth";
+import {
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence,
+} from "firebase/auth";
 import { isAdminEmail } from "@/lib/adminConfig";
 
 export default function AdminLoginPage() {
@@ -16,14 +21,41 @@ export default function AdminLoginPage() {
   const [authChecking, setAuthChecking] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user && isAdminEmail(user.email)) {
-        router.replace("/admin");
+    let isMounted = true;
+    let unsubscribe = () => {};
+
+    const initAuth = async () => {
+      if (!auth) {
+        if (isMounted) {
+          setError("Auth service unavailable. Please check Firebase config.");
+          setAuthChecking(false);
+        }
         return;
       }
-      setAuthChecking(false);
-    });
-    return () => unsubscribe();
+
+      try {
+        await setPersistence(auth, browserLocalPersistence);
+      } catch (err) {
+        console.error("[Admin Login] Failed to enforce auth persistence:", err);
+      }
+
+      if (!isMounted) return;
+
+      unsubscribe = onAuthStateChanged(auth, (user) => {
+        if (user && isAdminEmail(user.email)) {
+          router.replace("/admin");
+          return;
+        }
+        setAuthChecking(false);
+      });
+    };
+
+    initAuth();
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, [router]);
 
   const handleSubmit = async (e) => {
@@ -35,6 +67,7 @@ export default function AdminLoginPage() {
     }
     setLoading(true);
     try {
+      await setPersistence(auth, browserLocalPersistence);
       const userCred = await signInWithEmailAndPassword(auth, email.trim(), password);
       if (!isAdminEmail(userCred.user.email)) {
         await auth.signOut();
