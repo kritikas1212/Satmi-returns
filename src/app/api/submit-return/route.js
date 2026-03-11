@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server';
 import { doc, setDoc, serverTimestamp, query, where, getDocs, collection } from 'firebase/firestore';
 import { db } from '@/lib/firebaseConfig';
 import { z } from 'zod';
+import { Resend } from 'resend';
 
-const FROM_EMAIL = "Satmi Support <support@satmi.in>";
+// Use RESEND_FROM_EMAIL env var once satmi.in is verified in Resend dashboard.
+// Until then, Resend's shared domain is used so emails actually deliver.
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "Satmi Returns <onboarding@resend.dev>";
 const MAX_RETURN_REQUESTS_PER_USER = 2;
 
 // Validation schemas
@@ -32,9 +35,8 @@ async function checkExistingReturns(orderId, lineItemIds) {
       collection(db, "returns"),
       where("orderId", "==", orderId)
     );
-    
     const querySnapshot = await getDocs(returnsQuery);
-    const existingReturns = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const existingReturns = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     
     // Check if any selected line items already have an active return workflow.
     const existingLineItemIds = new Set();
@@ -74,7 +76,6 @@ async function checkUserReturnLimit(phone) {
       collection(db, "returns"),
       where("phone", "==", phone)
     );
-
     const querySnapshot = await getDocs(returnsQuery);
     const totalReturns = querySnapshot.size;
 
@@ -109,7 +110,6 @@ async function fetchShopifyOrder(orderId) {
           node {
             id
             name
-            orderNumber
             totalPriceSet {
               shopMoney {
                 amount
@@ -137,15 +137,11 @@ async function fetchShopifyOrder(orderId) {
               }
             }
             fulfillments(first: 10) {
-              edges {
-                node {
-                  createdAt
-                  trackingInfo {
-                    company
-                    number
-                    url
-                  }
-                }
+              createdAt
+              trackingInfo {
+                company
+                number
+                url
               }
             }
           }
@@ -191,7 +187,6 @@ async function fetchShopifyOrder(orderId) {
 
 export async function POST(request) {
   try {
-    // Verify Firestore is configured
     if (!db) {
       console.error('Firestore not configured — Firebase client SDK missing or env vars not set');
       return NextResponse.json(
@@ -328,7 +323,7 @@ export async function POST(request) {
         reason,
         comments: comments || "No comments",
         videoUrl, // This is now the public URL from Firebase Storage
-        originalCourier,
+        originalCourier: originalCourier || null,
         status: "Pending",
         workflowStatus: "RETURN_REQUESTED",
         createdAt: serverTimestamp(),
@@ -354,11 +349,57 @@ export async function POST(request) {
       
       await setDoc(doc(db, "returns", `${orderId}_${Date.now()}`), returnDoc);
     } catch (firestoreErr) {
-      console.error("Firestore logging failed:", firestoreErr);
+      console.error("Firestore write failed:", firestoreErr);
       return NextResponse.json(
         { success: false, error: "Failed to save return request", code: "FIRESTORE_ERROR", details: firestoreErr.message }, 
         { status: 500 }
       );
+    }
+
+    // Send confirmation email to customer
+    let emailSent = false;
+    let emailError = null;
+
+    if (email && process.env.RESEND_API_KEY) {
+      try {
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const itemsList = items.map(item => `<li>${item.title} (Qty: ${item.quantity}) — ₹${item.price}</li>`).join('');
+        const html = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: #7A1E1E; padding: 20px; text-align: center;">
+              <h1 style="color: #fff; margin: 0; font-size: 20px;">Return Request Received</h1>
+            </div>
+            <div style="padding: 24px; background: #fff;">
+              <p>Hi ${customerName || 'Customer'},</p>
+              <p>We have received your return request for order <strong>${orderId}</strong>. Our team will review it and get back to you shortly.</p>
+              <p><strong>Items requested for return:</strong></p>
+              <ul>${itemsList}</ul>
+              <p><strong>Reason:</strong> ${reason}</p>
+              ${comments ? `<p><strong>Comments:</strong> ${comments}</p>` : ''}
+              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+              <p style="font-size: 13px; color: #666;">You will receive another email once your return request has been reviewed. If approved, a return shipping label will be sent to this email address.</p>
+              <p style="font-size: 13px; color: #666;">If you have any questions, please contact us at <a href="mailto:support@satmi.in">support@satmi.in</a>.</p>
+              <p>— Satmi Support</p>
+            </div>
+          </div>
+        `;
+        const emailResult = await resend.emails.send({
+          from: FROM_EMAIL,
+          to: [email],
+          subject: `Return Request Received - Order ${orderId} - Satmi`,
+          html,
+        });
+        if (emailResult.error) {
+          throw new Error(emailResult.error.message || 'Resend API error');
+        }
+        emailSent = true;
+        console.log('Confirmation email sent, id:', emailResult.data?.id);
+      } catch (emailErr) {
+        emailError = emailErr?.message || 'Confirmation email failed';
+        console.error('Confirmation email failed:', emailErr);
+      }
+    } else {
+      emailError = !process.env.RESEND_API_KEY ? 'RESEND_API_KEY not configured' : 'Customer email not provided';
     }
 
     return NextResponse.json({
@@ -368,7 +409,9 @@ export async function POST(request) {
         refundAmount,
         currency: shopifyOrder?.totalPriceSet?.shopMoney?.currencyCode || "INR",
         orderId,
-        itemCount: items.length
+        itemCount: items.length,
+        emailSent,
+        emailError
       }
     });
 

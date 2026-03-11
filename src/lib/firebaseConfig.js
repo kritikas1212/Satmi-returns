@@ -1,7 +1,7 @@
 // src/lib/firebaseConfig.js
 // Firebase client config — uses NEXT_PUBLIC_* env vars so phone OTP auth works correctly.
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getStorage } from "firebase/storage";
 import { getFirestore } from "firebase/firestore";
 
@@ -47,6 +47,12 @@ if (missing.length === 0) {
   try {
     app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
     auth = getAuth(app);
+    // Explicitly set persistence so sessions survive page refresh and browser restart
+    if (typeof window !== "undefined") {
+      setPersistence(auth, browserLocalPersistence).catch((err) =>
+        console.error("[Firebase] Failed to set auth persistence:", err)
+      );
+    }
     storage = getStorage(app);
     db = getFirestore(app);
     console.log("[Firebase] App initialized successfully");

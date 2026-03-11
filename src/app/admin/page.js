@@ -61,6 +61,18 @@ export default function AdminDashboard() {
     return () => unsubscribe();
   }, [user]);
 
+  const parseApiResponse = async (res) => {
+    const text = await res.text();
+    try {
+      return text ? JSON.parse(text) : {};
+    } catch {
+      const snippet = String(text || "").slice(0, 120).replace(/\s+/g, " ").trim();
+      throw new Error(
+        `Server returned non-JSON response (status ${res.status}). ${snippet || "Empty response"}`
+      );
+    }
+  };
+
   const filteredReturns = returns
     .filter((r) => {
       // Status filter
@@ -154,19 +166,19 @@ export default function AdminDashboard() {
           approvedBy: user?.email || null,
         }),
       });
-      let data;
-      try {
-        data = await res.json();
-      } catch {
-        throw new Error(res.ok ? "Invalid response" : `Request failed (${res.status}). Check console.`);
-      }
-      if (!data.success) {
+      const data = await parseApiResponse(res);
+      if (!res.ok || !data.success) {
         throw new Error(data.error || "Approve failed");
       }
 
       setApproveModal({ open: false, request: null });
       if (data.labelUrl) window.open(data.labelUrl, "_blank");
-      alert(`Return created. Label ${data.labelUrl ? "opened and " : ""}${data.emailSent ? "approval email sent" : "approval email queued/failed"} for ${request.email}.`);
+      if (data.emailSent) {
+        alert(`Return created. Label ${data.labelUrl ? "opened and " : ""}approval email sent to ${request.email}.`);
+      } else {
+        const emailReason = data.emailError || 'Unknown error';
+        alert(`Return created. Label ${data.labelUrl ? "opened. " : ""}⚠️ Approval email FAILED for ${request.email}.\n\nReason: ${emailReason}\n\nPlease forward the return label manually.`);
+      }
     } catch (error) {
       console.error("Approve error:", error);
       alert("Error: " + error.message);
@@ -209,7 +221,7 @@ export default function AdminDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ shipmentId: sid }),
       });
-      const data = await res.json();
+      const data = await parseApiResponse(res);
       if (!data.success) throw new Error(data.error || "Label generation failed");
       const labelUrl = data.labelUrl;
       if (labelUrl) {
@@ -276,7 +288,7 @@ export default function AdminDashboard() {
           }),
         });
         
-        const data = await res.json();
+        const data = await parseApiResponse(res);
         if (!res.ok || !data.success) {
           throw new Error(data.error || `Approval failed for return ${returnId}`);
         }

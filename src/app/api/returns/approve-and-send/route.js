@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { createReturnOrder, generateLabel } from "@/lib/shiprocketServer";
 
-const FROM_EMAIL = "Satmi Support <support@satmi.in>";
+// Use RESEND_FROM_EMAIL env var once satmi.in is verified in Resend dashboard.
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "Satmi Returns <onboarding@resend.dev>";
 
 /**
  * POST /api/returns/approve-and-send
@@ -113,8 +114,6 @@ export async function POST(request) {
           <li>Attach the return label to the package.</li>
           <li>Hand over the package to the assigned courier partner.</li>
         </ol>
-        <p><strong>Courier:</strong> ${courier || "—"}</p>
-        <p><strong>AWB:</strong> ${awb || "—"}</p>
         ${labelUrl ? `<p><a href="${labelUrl}" style="display:inline-block;background:#7A1E1E;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">Download return shipping label</a></p>` : ""}
         ${labelUrl ? `<p>Or copy this link: <a href="${labelUrl}">${labelUrl}</a></p>` : ""}
         <p>Please pack the item securely and hand it over to the courier. Our team will process the return once received at our warehouse.</p>
@@ -128,8 +127,12 @@ export async function POST(request) {
           subject: `Return Approved - Order ${orderId} - Satmi`,
           html,
         });
+        if (emailResult.error) {
+          throw new Error(emailResult.error.message || 'Resend API error');
+        }
         emailSent = true;
         emailMessageId = emailResult?.data?.id || null;
+        console.log('Approval email sent, id:', emailMessageId);
       } catch (emailErr) {
         emailError = emailErr?.message || "Email failed";
         console.error("Return label email failed:", emailErr);
@@ -156,6 +159,7 @@ export async function POST(request) {
       returnId,
       workflowStatus: "RETURN_APPROVED",
       emailSent,
+      emailError,
     });
   } catch (error) {
     console.error("approve-and-send error:", error);

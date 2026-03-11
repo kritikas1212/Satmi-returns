@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { doc, getDoc, query, where, getDocs, collection } from 'firebase/firestore';
+import { query, where, getDocs, collection } from 'firebase/firestore';
 import { db } from '@/lib/firebaseConfig';
 import { z } from 'zod';
 
@@ -51,12 +51,11 @@ function normalizeGraphQLOrder(order) {
     };
   });
 
-  const fulfillments = (order.fulfillments?.edges || []).map((edge) => {
-    const n = edge.node;
-    const t = n.trackingInfo?.[0] || {};
+  const fulfillments = (order.fulfillments || []).map((f) => {
+    const t = f.trackingInfo?.[0] || {};
     return {
-      id: extractNumericId(n.id),
-      created_at: n.createdAt,
+      id: extractNumericId(f.id),
+      created_at: f.createdAt,
       tracking_company: t.company || null,
       tracking_number: t.number || null,
       tracking_url: t.url || null,
@@ -77,7 +76,7 @@ function normalizeGraphQLOrder(order) {
   return {
     id: extractNumericId(order.id),
     name: order.name,
-    order_number: order.orderNumber,
+    order_number: order.orderNumber || null,
     created_at: order.createdAt,
     cancelled_at: order.cancelledAt || null,
     financial_status: fMap[order.displayFinancialStatus] || (order.displayFinancialStatus || '').toLowerCase() || 'paid',
@@ -137,9 +136,8 @@ export async function POST(request) {
         collection(db, "returns"),
         where("orderId", "==", orderId)
       );
-      
       const querySnapshot = await getDocs(returnsQuery);
-      const returns = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const returns = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       
       if (returns.length === 0) {
         return NextResponse.json(
@@ -217,7 +215,6 @@ async function GET_CUSTOMER_DETAILS(orderId) {
             node {
               id
               name
-              orderNumber
               displayFinancialStatus
               displayFulfillmentStatus
               createdAt
@@ -263,15 +260,11 @@ async function GET_CUSTOMER_DETAILS(orderId) {
                 }
               }
               fulfillments(first: 10) {
-                edges {
-                  node {
-                    createdAt
-                    trackingInfo {
-                      company
-                      number
-                      url
-                    }
-                  }
+                createdAt
+                trackingInfo {
+                  company
+                  number
+                  url
                 }
               }
             }
@@ -414,7 +407,7 @@ async function GET_CUSTOMER_DETAILS(orderId) {
         email: orderData.customer?.email || orderData.billingAddress?.email || orderData.billing_address?.email || "",
         phone: phoneNumber,
         maskedPhone: maskedPhone,
-        orderId: orderData.name || orderData.orderNumber || orderData.order_number || cleanOrderId
+        orderId: orderData.name || orderData.order_number || cleanOrderId
       },
       orders: normalizedOrders
     });
@@ -449,7 +442,6 @@ async function fetchAllOrdersForPhoneGraphQL(phoneNumber, domain, token) {
           node {
             id
             name
-            orderNumber
             displayFinancialStatus
             displayFulfillmentStatus
             createdAt
@@ -495,15 +487,11 @@ async function fetchAllOrdersForPhoneGraphQL(phoneNumber, domain, token) {
               }
             }
             fulfillments(first: 10) {
-              edges {
-                node {
-                  createdAt
-                  trackingInfo {
-                    company
-                    number
-                    url
-                  }
-                }
+              createdAt
+              trackingInfo {
+                company
+                number
+                url
               }
             }
           }

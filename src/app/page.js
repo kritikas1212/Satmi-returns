@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { auth, storage, db } from "../lib/firebaseConfig";
 import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { collection, addDoc, serverTimestamp, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
 
 export default function ReturnPortal() {
   // --- STATE ---
@@ -148,6 +148,18 @@ export default function ReturnPortal() {
     return cleanPhone.startsWith('+') ? cleanPhone : `+${cleanPhone}`;
   };
 
+  const parseApiResponse = async (res) => {
+    const text = await res.text();
+    try {
+      return text ? JSON.parse(text) : {};
+    } catch {
+      const snippet = String(text || "").slice(0, 120).replace(/\s+/g, " ").trim();
+      throw new Error(
+        `Server returned non-JSON response (status ${res.status}). ${snippet || "Empty response"}`
+      );
+    }
+  };
+
   const sendOtp = async () => {
     setError("");
     setSuccessMessage("");
@@ -266,6 +278,11 @@ export default function ReturnPortal() {
         setConfirmationResult(null); // force re-send flow
       } else if (err?.code === "auth/invalid-verification-code") {
         setError("Invalid OTP. Please check and try again.");
+      } else if (err?.code === "auth/internal-error") {
+        // Firebase backend error — stale reCAPTCHA session or a transient service issue.
+        // Clear confirmationResult so the user is forced to request a fresh OTP.
+        setError("Verification failed due to an internal error. Please request a new OTP and try again.");
+        setConfirmationResult(null);
       } else {
         setError(err?.message || "Verification failed. Please try again.");
       }
@@ -295,7 +312,7 @@ export default function ReturnPortal() {
         }),
       });
 
-      const data = await response.json();
+      const data = await parseApiResponse(response);
       
       if (data.success) {
         // Store phone number internally but don't display it in input field
@@ -454,7 +471,7 @@ export default function ReturnPortal() {
         },
         body: JSON.stringify({ phoneNumber: phone }),
       });
-      const data = await res.json();
+      const data = await parseApiResponse(res);
       
       if (!res.ok) throw new Error(data.error || "Failed to fetch orders");
       if (!data.orders || data.orders.length === 0) throw new Error("No orders found for this number.");
@@ -513,7 +530,7 @@ export default function ReturnPortal() {
         }),
       });
 
-      const data = await res.json();
+      const data = await parseApiResponse(res);
 
       if (!data.success) {
         setError(data.error || 'Failed to cancel order');
@@ -860,7 +877,7 @@ export default function ReturnPortal() {
         }),
       });
       
-      const data = await res.json();
+      const data = await parseApiResponse(res);
       
       if (!data.success) {
         const errorMessages = {
@@ -1084,7 +1101,7 @@ export default function ReturnPortal() {
         })
       });
       
-      const result = await response.json();
+      const result = await parseApiResponse(response);
       
       if (!result.success) {
         // Map error codes to user-friendly messages
@@ -1097,7 +1114,7 @@ export default function ReturnPortal() {
           'INTERNAL_ERROR': 'Server error. Please try again later.'
         };
         
-        const userMessage = errorMessages[result.code] || result.error || 'Return processing failed';
+        const userMessage = errorMessages[result.code] || result.error || result.details || 'Return processing failed';
         setError(userMessage);
         return;
       }
@@ -1133,12 +1150,18 @@ export default function ReturnPortal() {
         // Clear any stale auth/OTP errors when user successfully logs in
         setError("");
         setSuccessMessage("");
-        fetchOrders(phoneNumber, null); // Fetch orders when logged in
-        fetchReturnHistory(phoneNumber); // Fetch existing returns for duplicate detection
+        // Use the phone number from the Firebase Auth user (restored persisted session)
+        // rather than the phoneNumber state which defaults to "+91" on page reload.
+        const phone = currentUser.phoneNumber || phoneNumber;
+        if (phone && phone !== "+91") {
+          setPhoneNumber(phone);
+          fetchOrders(phone, null);
+          fetchReturnHistory(phone);
+        }
       }
     });
     return () => unsubscribe();
-  }, [phoneNumber]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- RENDER: LOGIN SCREEN ---
   if (!user) {

@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Admin emails — must match src/lib/adminConfig.js ADMIN_EMAILS list
+    function isAdmin() {
+      return request.auth != null &&
+        (request.auth.token.email == 'kritika@satmi.in' ||
+         request.auth.token.email == 'support@satmi.in');
+    }
+
+    match /returns/{returnId} {
+      // Admins can read + write everything (reject, update warehouse, etc.)
+      allow read, write: if isAdmin();
+
+      // Phone-authenticated users can read their own returns (My Returns tab)
+      allow read: if request.auth != null &&
+        resource.data.phone == request.auth.token.phone_number;
+
+      // Server-side API routes use the client SDK without auth context.
+      // Allow creates with required field validation as a safety gate.
+      allow create: if request.resource.data.keys().hasAll(
+        ['orderId', 'phone', 'email', 'status', 'workflowStatus', 'items']
+      );
+
+      // Allow reads for idempotency checks and status queries from API routes.
+      allow read: if true;
+
+      // Allow updates from API routes (approve flow writes shipment info).
+      allow update: if true;
+    }
+
+    // Deny everything else by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
