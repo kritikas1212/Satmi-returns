@@ -203,7 +203,7 @@ export async function POST(request) {
 
       let deliveredDate = null;
       let isReturnable = false;
-      let statusMessage = "Processing";
+      let statusMessage = "Not Shipped";
       let returnEligibilityReason = "";
 
       // Check order financial status first
@@ -268,7 +268,7 @@ export async function POST(request) {
           isReturnable = false;
         } else {
           statusMessage = "Shipped";
-          returnEligibilityReason = "This item has been shipped but status is pending";
+          returnEligibilityReason = "This item has been shipped and delivery status is being updated";
           isReturnable = false;
         }
       } else if (fulfillment && fulfillment.shipment_status === 'delivered') {
@@ -334,7 +334,7 @@ export async function POST(request) {
          returnEligibilityReason = "This item is currently in transit and not yet eligible for return";
          isReturnable = false;
       } else {
-         statusMessage = "Not Shipped Yet";
+        statusMessage = "Not Shipped";
          returnEligibilityReason = "This item has not been shipped yet and is not eligible for return";
          isReturnable = false;
       }

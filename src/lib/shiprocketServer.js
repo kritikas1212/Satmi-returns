@@ -6,21 +6,18 @@
  * - Shipping = warehouse (return is received at warehouse). From env WAREHOUSE_*.
  */
 
+import { lookupIndianPincode } from "@/lib/indiaAddress";
+
 async function getPincodeDetails(pincode) {
   const digits = String(pincode).replace(/\D/g, "").slice(0, 6);
   if (!digits) return null;
   try {
-    const res = await fetch(`https://api.postalpincode.in/pincode/${digits}`, {
-      next: { revalidate: 86400 },
-    });
-    const data = await res.json();
-    const first = data?.[0];
-    if (first?.Status !== "Success" || !first?.PostOffice?.length) return null;
-    const po = first.PostOffice[0];
+    const lookup = await lookupIndianPincode(digits);
+    if (!lookup?.success) return null;
     return {
-      city: po.District || po.Name || "",
-      state: po.State || "",
-      country: "India",
+      city: lookup.suggestedCity || lookup.district || "",
+      state: lookup.state || "",
+      country: lookup.postOffices?.[0]?.country || "India",
     };
   } catch {
     return null;

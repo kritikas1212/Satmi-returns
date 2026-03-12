@@ -1,5 +1,25 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { State } from "country-state-city";
+import { lookupIndianPincode, normalizeLocationName, validatePincodeAgainstLocation } from "@/lib/indiaAddress";
+
+const INDIA_STATE_CODE_BY_NAME = new Map(
+  State.getStatesOfCountry("IN").map((state) => [normalizeLocationName(state.name), state.isoCode])
+);
+
+function resolveProvinceCode(stateValue) {
+  const normalized = normalizeLocationName(stateValue);
+  if (!normalized) return "";
+
+  const fromName = INDIA_STATE_CODE_BY_NAME.get(normalized);
+  if (fromName) return fromName;
+
+  if (/^[a-z]{2}$/i.test(String(stateValue || "").trim())) {
+    return String(stateValue).trim().toUpperCase();
+  }
+
+  return "";
+}
 
 // Validation schema for order modification
 const UpdateOrderSchema = z.object({
@@ -41,6 +61,7 @@ export async function PUT(request) {
     }
 
     const { orderId, shippingAddress, phone } = validation.data;
+    let validatedShippingAddress = shippingAddress;
 
     const SHOPIFY_STORE_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN;
     const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
@@ -142,6 +163,46 @@ export async function PUT(request) {
       );
     }
 
+    if (shippingAddress?.zip) {
+      const lookupResult = await lookupIndianPincode(shippingAddress.zip);
+      const locationValidation = validatePincodeAgainstLocation(
+        lookupResult,
+        shippingAddress.city,
+        shippingAddress.province
+      );
+
+      if (!locationValidation.valid) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: locationValidation.error,
+            code: locationValidation.code,
+            lookup: lookupResult.success
+              ? {
+                  state: lookupResult.state,
+                  cityOptions: lookupResult.cityOptions,
+                  localityOptions: lookupResult.localityOptions,
+                }
+              : null,
+          },
+          { status: 400 }
+        );
+      }
+
+      const normalizedProvince = shippingAddress.province || lookupResult.state || "";
+      const provinceCode =
+        resolveProvinceCode(normalizedProvince) ||
+        resolveProvinceCode(lookupResult.stateCode) ||
+        "";
+
+      validatedShippingAddress = {
+        ...shippingAddress,
+        city: shippingAddress.city || lookupResult.suggestedCity || shippingAddress.city,
+        province: normalizedProvince,
+        provinceCode,
+      };
+    }
+
     // --- Step 3: Build the update payload ---
     const updatePayload = { order: {} };
 
@@ -149,17 +210,31 @@ export async function PUT(request) {
       updatePayload.order.phone = phone;
     }
 
-    if (shippingAddress) {
+    if (validatedShippingAddress) {
+      const existingShippingAddress = shopifyOrder.shipping_address || {};
+      const province = validatedShippingAddress.province || existingShippingAddress.province;
+      const provinceCode =
+        validatedShippingAddress.provinceCode ||
+        resolveProvinceCode(province) ||
+        "";
+
       updatePayload.order.shipping_address = {
-        ...shopifyOrder.shipping_address,
-        address1: shippingAddress.address1 || shopifyOrder.shipping_address?.address1,
-        address2: shippingAddress.address2 ?? shopifyOrder.shipping_address?.address2 ?? "",
-        city: shippingAddress.city || shopifyOrder.shipping_address?.city,
-        province: shippingAddress.province || shopifyOrder.shipping_address?.province,
-        zip: shippingAddress.zip || shopifyOrder.shipping_address?.zip,
-        country: shippingAddress.country || shopifyOrder.shipping_address?.country,
-        phone: shippingAddress.phone || phone || shopifyOrder.shipping_address?.phone,
+        first_name: existingShippingAddress.first_name,
+        last_name: existingShippingAddress.last_name,
+        company: existingShippingAddress.company,
+        address1: validatedShippingAddress.address1 || existingShippingAddress.address1,
+        address2: validatedShippingAddress.address2 ?? existingShippingAddress.address2 ?? "",
+        city: validatedShippingAddress.city || existingShippingAddress.city,
+        province,
+        zip: validatedShippingAddress.zip || existingShippingAddress.zip,
+        country: validatedShippingAddress.country || existingShippingAddress.country || "India",
+        phone: validatedShippingAddress.phone || phone || existingShippingAddress.phone,
+        country_code: existingShippingAddress.country_code || "IN",
       };
+
+      if (provinceCode) {
+        updatePayload.order.shipping_address.province_code = provinceCode;
+      }
     }
 
     // --- Step 4: Send the update to Shopify ---

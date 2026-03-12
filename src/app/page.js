@@ -1,10 +1,87 @@
 'use client';
 
 import { useState, useEffect } from "react";
+import { State, City } from "country-state-city";
 import { auth, storage, db } from "../lib/firebaseConfig";
 import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { collection, query, where, getDocs } from "firebase/firestore";
+
+const INDIA_COUNTRY_CODE = "IN";
+const INDIA_STATE_OPTIONS = State.getStatesOfCountry(INDIA_COUNTRY_CODE)
+  .map((state) => ({ name: state.name, isoCode: state.isoCode }))
+  .sort((left, right) => left.name.localeCompare(right.name));
+
+const normalizeLocationValue = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const dedupeLocationOptions = (values) => {
+  const seen = new Set();
+  const result = [];
+
+  values.forEach((value) => {
+    const cleaned = String(value || "").replace(/\s+/g, " ").trim();
+    const normalized = normalizeLocationValue(cleaned);
+
+    if (!cleaned || !normalized || normalized === "na" || seen.has(normalized)) {
+      return;
+    }
+
+    seen.add(normalized);
+    result.push(cleaned);
+  });
+
+  return result;
+};
+
+const matchesLocationOption = (value, options) => {
+  const normalizedValue = normalizeLocationValue(value);
+  if (!normalizedValue) return true;
+
+  return options.some((option) => normalizeLocationValue(option) === normalizedValue);
+};
+
+const getStateRecord = (stateName) =>
+  INDIA_STATE_OPTIONS.find(
+    (state) => normalizeLocationValue(state.name) === normalizeLocationValue(stateName)
+  );
+
+const getCityOptionsForState = (stateName) => {
+  const stateRecord = getStateRecord(stateName);
+  if (!stateRecord) {
+    return [];
+  }
+
+  return dedupeLocationOptions(
+    City.getCitiesOfState(INDIA_COUNTRY_CODE, stateRecord.isoCode).map((city) => city.name)
+  );
+};
+
+const RETURN_STATUS_META = {
+  RETURN_REQUESTED: {
+    className: 'bg-blue-50 text-blue-600 border-blue-200',
+    label: 'Return Requested',
+  },
+  RETURN_APPROVED: {
+    className: 'bg-emerald-50 text-emerald-600 border-emerald-200',
+    label: 'Return Approved',
+  },
+  RETURN_REJECTED: {
+    className: 'bg-red-50 text-red-500 border-red-200',
+    label: 'Return Rejected',
+  },
+  RETURNED: {
+    className: 'bg-amber-50 text-amber-600 border-amber-200',
+    label: 'Returned',
+  },
+  STATUS_UNAVAILABLE: {
+    className: 'bg-gray-50 text-gray-500 border-gray-200',
+    label: 'Status Unavailable',
+  },
+};
 
 export default function ReturnPortal() {
   // --- STATE ---
@@ -62,6 +139,11 @@ export default function ReturnPortal() {
   const [editedState, setEditedState] = useState("");
   const [editedZip, setEditedZip] = useState("");
   const [editedPhone, setEditedPhone] = useState("");
+  const [cityOptions, setCityOptions] = useState([]);
+  const [pincodeLookupResult, setPincodeLookupResult] = useState(null);
+  const [pincodeLookupLoading, setPincodeLookupLoading] = useState(false);
+  const [pincodeLookupError, setPincodeLookupError] = useState("");
+  const [addressValidationError, setAddressValidationError] = useState("");
   const [isSavingModification, setIsSavingModification] = useState(false);
 
   // --- AUTHENTICATION ---
@@ -118,6 +200,108 @@ export default function ReturnPortal() {
       window.removeEventListener('scroll', closeMenu, true);
     };
   }, [openKebabMenu]);
+
+  useEffect(() => {
+    if (!modifyingOrder || !editedState) {
+      setCityOptions([]);
+      return;
+    }
+
+    const nextCityOptions = dedupeLocationOptions([
+      ...(pincodeLookupResult?.cityOptions || []),
+      ...getCityOptionsForState(editedState),
+    ]);
+
+    setCityOptions(nextCityOptions);
+    if (editedCity && !matchesLocationOption(editedCity, nextCityOptions)) {
+      setEditedCity("");
+    }
+  }, [editedState, editedCity, modifyingOrder, pincodeLookupResult]);
+
+  useEffect(() => {
+    if (!modifyingOrder) {
+      setPincodeLookupLoading(false);
+      setPincodeLookupError("");
+      setAddressValidationError("");
+      setPincodeLookupResult(null);
+      return;
+    }
+
+    const cleanPincode = String(editedZip || "").replace(/\D/g, "").slice(0, 6);
+    if (cleanPincode.length !== 6) {
+      setPincodeLookupLoading(false);
+      setPincodeLookupError("");
+      setAddressValidationError("");
+      setPincodeLookupResult(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setPincodeLookupLoading(true);
+      setPincodeLookupError("");
+
+      try {
+        const res = await fetch(`/api/pincode?pincode=${cleanPincode}`, {
+          signal: controller.signal,
+        });
+        const data = await parseApiResponse(res);
+
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || "Unable to verify PIN code.");
+        }
+
+        setPincodeLookupResult(data);
+        setEditedState(data.state || "");
+        setEditedCity((currentCity) => {
+          if (currentCity && matchesLocationOption(currentCity, data.cityOptions || [])) {
+            return currentCity;
+          }
+          return data.suggestedCity || data.cityOptions?.[0] || "";
+        });
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setPincodeLookupResult(null);
+        setPincodeLookupError(error.message || "Unable to verify PIN code.");
+      } finally {
+        if (!controller.signal.aborted) {
+          setPincodeLookupLoading(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [editedZip, modifyingOrder]);
+
+  useEffect(() => {
+    if (!modifyingOrder || !pincodeLookupResult?.success || String(editedZip || "").length !== 6) {
+      setAddressValidationError("");
+      return;
+    }
+
+    if (!matchesLocationOption(editedState, [pincodeLookupResult.state])) {
+      setAddressValidationError(
+        `PIN code ${editedZip} does not match the selected state.`
+      );
+      return;
+    }
+
+    const pincodeCities = pincodeLookupResult.cityOptions?.length
+      ? pincodeLookupResult.cityOptions
+      : [pincodeLookupResult.suggestedCity, pincodeLookupResult.district];
+
+    if (!matchesLocationOption(editedCity, pincodeCities)) {
+      setAddressValidationError(
+        `PIN code ${editedZip} does not match the selected city.`
+      );
+      return;
+    }
+
+    setAddressValidationError("");
+  }, [editedCity, editedState, editedZip, modifyingOrder, pincodeLookupResult]);
 
   // Phone number validation
   const validatePhoneNumber = (phone) => {
@@ -620,7 +804,8 @@ export default function ReturnPortal() {
     if (legacy === 'approved') return 'RETURN_APPROVED';
     if (legacy === 'rejected') return 'RETURN_REJECTED';
     if (legacy === 'returned') return 'RETURNED';
-    return 'RETURN_REQUESTED';
+    if (legacy === 'pending' || legacy === 'requested' || legacy === 'return_requested') return 'RETURN_REQUESTED';
+    return null;
   };
 
   // Check if a specific line item already has an existing return
@@ -650,12 +835,20 @@ export default function ReturnPortal() {
     if (order.cancelled_at) return 'Cancelled';
 
     const deliveryMessage = String(order.delivery_status?.message || '');
-    if (
-      deliveryMessage === 'Delivered'
-      || deliveryMessage === 'Delivered (Date Unknown)'
-      || deliveryMessage === 'Return Window Closed'
-    ) {
+    if (deliveryMessage === 'Delivered' || deliveryMessage === 'Delivered (Date Unknown)' || deliveryMessage === 'Return Window Closed') {
       return 'Delivered';
+    }
+
+    if (deliveryMessage === 'In Transit') {
+      return 'In Transit';
+    }
+
+    if (deliveryMessage === 'Shipped') {
+      return 'Shipped';
+    }
+
+    if (deliveryMessage === 'Not Shipped Yet') {
+      return 'Not Shipped';
     }
 
     if (deliveryMessage.toLowerCase().includes('in transit') || deliveryMessage.toLowerCase().includes('out for delivery')) {
@@ -667,7 +860,7 @@ export default function ReturnPortal() {
       return 'Shipped';
     }
 
-    return 'Processing';
+    return 'Not Shipped';
   };
 
   const toggleKebabMenu = (event, orderId) => {
@@ -811,6 +1004,9 @@ export default function ReturnPortal() {
       setEditedState(order.shipping_address?.province || order.shipping_address?.province_code || "");
       setEditedZip(order.shipping_address?.zip || "");
       setEditedPhone(order.phone || order.shipping_address?.phone || "");
+      setPincodeLookupResult(null);
+      setPincodeLookupError("");
+      setAddressValidationError("");
     } else if (action === 'return') {
       if (returnHistory.length >= 2) {
         setError("You have reached the maximum limit of 2 return requests. Please contact support@satmi.in for further assistance.");
@@ -854,6 +1050,28 @@ export default function ReturnPortal() {
     if (!modifyingOrder) return;
     setError("");
     setSuccessMessage("");
+
+    const cleanPincode = String(editedZip || "").replace(/\D/g, "").slice(0, 6);
+    if (cleanPincode.length !== 6) {
+      setError("Please enter a valid 6-digit PIN code.");
+      return;
+    }
+
+    if (!editedState) {
+      setError("Please select a state.");
+      return;
+    }
+
+    if (!editedCity) {
+      setError("Please select a city.");
+      return;
+    }
+
+    if (addressValidationError) {
+      setError(addressValidationError);
+      return;
+    }
+
     setIsSavingModification(true);
     
     try {
@@ -870,7 +1088,8 @@ export default function ReturnPortal() {
             address2: editedAddress2,
             city: editedCity,
             province: editedState,
-            zip: editedZip,
+            zip: cleanPincode,
+            country: "India",
             phone: editedPhone,
           },
           phone: editedPhone,
@@ -908,6 +1127,9 @@ export default function ReturnPortal() {
       
       setSuccessMessage(`Order ${data.order?.name || orderIdentifier} updated successfully!`);
       setModifyingOrder(null);
+            setPincodeLookupResult(null);
+            setPincodeLookupError("");
+            setAddressValidationError("");
     } catch (err) {
       console.error('Modification error:', err);
       setError("Network error while updating order. Please try again.");
@@ -2026,6 +2248,11 @@ export default function ReturnPortal() {
                 </div>
               ) : returnHistory.length > 0 ? (
                 returnHistory.map((returnRequest, index) => (
+                  (() => {
+                    const normalizedStatus = getNormalizedReturnWorkflowStatus(returnRequest);
+                    const statusMeta = RETURN_STATUS_META[normalizedStatus] || RETURN_STATUS_META.STATUS_UNAVAILABLE;
+
+                    return (
                   <div key={index} className="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-sm transition-shadow">
                     <div className="flex justify-between items-start mb-3">
                       <div>
@@ -2034,17 +2261,8 @@ export default function ReturnPortal() {
                           {new Date(returnRequest.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                         </p>
                       </div>
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold tracking-wide border ${
-                        getNormalizedReturnWorkflowStatus(returnRequest) === 'RETURN_REQUESTED' ? 'bg-blue-50 text-blue-600 border-blue-200' :
-                        getNormalizedReturnWorkflowStatus(returnRequest) === 'RETURN_APPROVED' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
-                        getNormalizedReturnWorkflowStatus(returnRequest) === 'RETURN_REJECTED' ? 'bg-red-50 text-red-500 border-red-200' :
-                        getNormalizedReturnWorkflowStatus(returnRequest) === 'RETURNED' ? 'bg-amber-50 text-amber-600 border-amber-200' :
-                        'bg-gray-50 text-gray-500 border-gray-200'
-                      }`}>
-                        {getNormalizedReturnWorkflowStatus(returnRequest) === 'RETURN_REQUESTED' ? 'Return Requested' :
-                         getNormalizedReturnWorkflowStatus(returnRequest) === 'RETURN_APPROVED' ? 'Return Approved' :
-                         getNormalizedReturnWorkflowStatus(returnRequest) === 'RETURN_REJECTED' ? 'Return Rejected' :
-                         getNormalizedReturnWorkflowStatus(returnRequest) === 'RETURNED' ? 'Returned' : 'Pending'}
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold tracking-wide border ${statusMeta.className}`}>
+                        {statusMeta.label}
                       </span>
                     </div>
                     
@@ -2073,6 +2291,8 @@ export default function ReturnPortal() {
                       </div>
                     )}
                   </div>
+                    );
+                  })()
                 ))
               ) : (
                 <div className="text-center py-20">
@@ -2246,7 +2466,12 @@ export default function ReturnPortal() {
                   <h3 className="text-base font-semibold text-gray-900">Modify Order {modifyingOrder.name}</h3>
                 </div>
                 <button
-                  onClick={() => setModifyingOrder(null)}
+                  onClick={() => {
+                    setModifyingOrder(null);
+                    setPincodeLookupResult(null);
+                    setPincodeLookupError("");
+                    setAddressValidationError("");
+                  }}
                   className="p-1 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
@@ -2296,23 +2521,37 @@ export default function ReturnPortal() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">City</label>
-                    <input
-                      type="text"
+                    <select
                       value={editedCity}
                       onChange={(e) => setEditedCity(e.target.value)}
+                      disabled={!editedState}
                       className="w-full border border-gray-200 px-4 py-3 rounded-xl text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] transition-colors"
-                      placeholder="City"
-                    />
+                    >
+                      <option value="">{editedState ? "Select city" : "Select state first"}</option>
+                      {cityOptions.map((city) => (
+                        <option key={city} value={city}>
+                          {city}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">State</label>
-                    <input
-                      type="text"
+                    <select
                       value={editedState}
-                      onChange={(e) => setEditedState(e.target.value)}
+                      onChange={(e) => {
+                        setEditedState(e.target.value);
+                        setEditedCity("");
+                      }}
                       className="w-full border border-gray-200 px-4 py-3 rounded-xl text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] transition-colors"
-                      placeholder="State / Province"
-                    />
+                    >
+                      <option value="">Select state</option>
+                      {INDIA_STATE_OPTIONS.map((state) => (
+                        <option key={state.isoCode} value={state.name}>
+                          {state.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
@@ -2322,10 +2561,13 @@ export default function ReturnPortal() {
                     <input
                       type="text"
                       value={editedZip}
-                      onChange={(e) => setEditedZip(e.target.value)}
+                      onChange={(e) => setEditedZip(e.target.value.replace(/\D/g, "").slice(0, 6))}
                       className="w-full border border-gray-200 px-4 py-3 rounded-xl text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] transition-colors"
                       placeholder="PIN code"
                     />
+                    {!pincodeLookupLoading && pincodeLookupError && (
+                      <p className="mt-1.5 text-[11px] text-red-500">{pincodeLookupError}</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Phone</label>
@@ -2338,11 +2580,22 @@ export default function ReturnPortal() {
                     />
                   </div>
                 </div>
+
+                {addressValidationError && (
+                  <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
+                    {addressValidationError}
+                  </div>
+                )}
               </div>
               
               <div className="flex gap-3 justify-end mt-6">
                 <button
-                  onClick={() => setModifyingOrder(null)}
+                  onClick={() => {
+                    setModifyingOrder(null);
+                    setPincodeLookupResult(null);
+                    setPincodeLookupError("");
+                    setAddressValidationError("");
+                  }}
                   className="px-5 py-2.5 border border-gray-200 text-gray-600 rounded-full hover:bg-gray-50 text-sm font-medium transition-colors"
                 >
                   Cancel
