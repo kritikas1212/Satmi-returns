@@ -4,9 +4,12 @@ import { db } from '@/lib/firebaseConfig';
 import { z } from 'zod';
 import { Resend } from 'resend';
 
-// Use RESEND_FROM_EMAIL env var once satmi.in is verified in Resend dashboard.
-// Until then, Resend's shared domain is used so emails actually deliver.
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "Satmi Returns <onboarding@resend.dev>";
+// Always prefer a verified satmi.in sender.
+// If RESEND_FROM_EMAIL is missing or not from satmi.in, force support@satmi.in.
+const configuredFromEmail = (process.env.RESEND_FROM_EMAIL || "").trim();
+const FROM_EMAIL = /@satmi\.in>?$/i.test(configuredFromEmail)
+  ? configuredFromEmail
+  : "Satmi Support <support@satmi.in>";
 const MAX_RETURN_REQUESTS_PER_USER = 2;
 
 // Validation schemas
