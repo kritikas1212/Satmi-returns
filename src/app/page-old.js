@@ -190,7 +190,7 @@ export default function ReturnPortal() {
         const result = await response.json();
         if (!result.success) {
           console.error('Automated return failed:', result.error);
-          alert("Error: " + (result.error || "Return processing failed"));
+          alert("Error: " + (result.error || "Replacement processing failed"));
           return;
         }
       } catch (apiErr) {
@@ -199,7 +199,7 @@ export default function ReturnPortal() {
         return;
       }
 
-      alert("Return Request Submitted Successfully! We will review and email you shortly.");
+      alert("Replacement Request Submitted Successfully! We will review and email you shortly.");
       
       // Reset Form
       setSelectedItems([]);
@@ -226,7 +226,7 @@ export default function ReturnPortal() {
 
         <div className="bg-white p-8 md:p-14 rounded shadow-sm z-10 border border-[#e5e0d8] w-[85vw] md:w-[50vw]">
           <div className="text-center mb-8">
-            <h1 className="font-serif text-2xl md:text-3xl text-[#3a3a3a] tracking-widest uppercase mb-3">Satmi Returns</h1>
+            <h1 className="font-serif text-2xl md:text-3xl text-[#3a3a3a] tracking-widest uppercase mb-3">Satmi Replacements</h1>
             <p className="text-gray-500 text-xs md:text-sm uppercase tracking-wide">Enter phone number to login</p>
           </div>
           <div id="recaptcha-container"></div>
@@ -297,7 +297,7 @@ export default function ReturnPortal() {
                         <div className="w-full md:w-auto flex justify-end">
                         {isEligible ? (
                           <label className="flex items-center space-x-2 cursor-pointer select-none bg-gray-50 px-3 py-1.5 rounded border border-gray-200 hover:border-[#7A1E1E] transition-colors">
-                            <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">Return</span>
+                            <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">Replacement</span>
                             <input type="checkbox" checked={!!isSelected} onChange={() => handleCheckboxChange(order, item)} className="w-4 h-4 rounded border-gray-300 text-[#7A1E1E] focus:ring-[#7A1E1E] accent-[#7A1E1E]" />
                           </label>
                         ) : (<span className="px-2 py-1 bg-gray-100 text-gray-400 text-[10px] font-bold rounded uppercase tracking-wider">Not Eligible</span>)}
@@ -319,13 +319,13 @@ export default function ReturnPortal() {
         </div>
       )}
 
-      {/* --- BULK RETURN MODAL (EMAIL INPUT INCLUDED) --- */}
+      {/* --- BULK REPLACEMENT MODAL (EMAIL INPUT INCLUDED) --- */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-[#3a3a3a]/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 transition-opacity">
           <div className="bg-white rounded shadow-2xl w-full max-w-md max-h-[85vh] overflow-y-auto flex flex-col border border-gray-100">
             <div className="p-5 border-b border-gray-100 bg-[#F9F6F2]">
-              <h2 className="text-lg font-serif font-bold text-[#3a3a3a] uppercase tracking-wide">Confirm Return</h2>
-              <p className="text-xs text-gray-500 mt-1">Returning {selectedItems.length} items</p>
+              <h2 className="text-lg font-serif font-bold text-[#3a3a3a] uppercase tracking-wide">Confirm Replacement</h2>
+              <p className="text-xs text-gray-500 mt-1">Preparing {selectedItems.length} items for replacement</p>
             </div>
             <div className="p-5 space-y-4">
               
@@ -348,7 +348,7 @@ export default function ReturnPortal() {
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase tracking-wide">Comments</label>
-                <textarea className="w-full border border-gray-300 px-3 py-2.5 rounded text-gray-900 placeholder-gray-400 focus:ring-1 focus:ring-[#7A1E1E] focus:border-[#7A1E1E] outline-none min-h-[60px] text-sm" value={comments} onChange={(e) => setComments(e.target.value)} placeholder="Details regarding all items..." style={{ color: 'black' }} />
+                <textarea className="w-full border border-gray-300 px-3 py-2.5 rounded text-gray-900 placeholder-gray-400 focus:ring-1 focus:ring-[#7A1E1E] focus:border-[#7A1E1E] outline-none min-h-15 text-sm" value={comments} onChange={(e) => setComments(e.target.value)} placeholder="Details regarding all items..." style={{ color: 'black' }} />
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase tracking-wide">Unboxing Video <span className="text-red-500 normal-case">(Required)</span></label>

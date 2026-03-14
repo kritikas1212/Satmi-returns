@@ -106,7 +106,7 @@ export default function AdminLoginPage() {
         <div className="text-center mb-8">
           <img src="/logo.png" alt="Satmi" className="h-10 mx-auto mb-4" />
           <h1 className="text-lg font-semibold text-gray-900">Support Dashboard</h1>
-          <p className="text-xs text-gray-400 mt-1">Sign in to manage returns</p>
+          <p className="text-xs text-gray-400 mt-1">Sign in to manage replacements</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -155,7 +155,7 @@ export default function AdminLoginPage() {
         </p>
         <div className="mt-3 text-center">
           <Link href="/" className="text-xs text-[#96572A] hover:underline">
-            ← Back to returns portal
+            ← Back to replacements portal
           </Link>
         </div>
       </div>

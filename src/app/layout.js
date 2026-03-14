@@ -9,7 +9,7 @@ const inter = Inter({
 
 export const metadata = {
   title: "SATMI — Orders",
-  description: "Manage your Satmi orders and returns",
+  description: "Manage your Satmi orders and replacements",
   icons: {
     icon: [
       { url: '/favicon.ico?v=2', sizes: '32x32' },

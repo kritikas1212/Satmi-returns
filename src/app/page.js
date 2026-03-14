@@ -63,24 +63,46 @@ const getCityOptionsForState = (stateName) => {
 const RETURN_STATUS_META = {
   RETURN_REQUESTED: {
     className: 'bg-blue-50 text-blue-600 border-blue-200',
-    label: 'Return Requested',
+    label: 'Replacement Requested',
   },
   RETURN_APPROVED: {
     className: 'bg-emerald-50 text-emerald-600 border-emerald-200',
-    label: 'Return Approved',
+    label: 'Replacement Approved',
   },
   RETURN_REJECTED: {
     className: 'bg-red-50 text-red-500 border-red-200',
-    label: 'Return Rejected',
+    label: 'Replacement Rejected',
   },
   RETURNED: {
     className: 'bg-amber-50 text-amber-600 border-amber-200',
-    label: 'Returned',
+    label: 'Replacement Completed',
   },
   STATUS_UNAVAILABLE: {
     className: 'bg-gray-50 text-gray-500 border-gray-200',
     label: 'Status Unavailable',
   },
+};
+
+const toReplacementCopy = (value) => {
+  if (!value) return value;
+
+  return String(value)
+    .replace(/Return Requested/g, 'Replacement Requested')
+    .replace(/Return Approved/g, 'Replacement Approved')
+    .replace(/Return Rejected/g, 'Replacement Rejected')
+    .replace(/\bReturned\b/g, 'Replacement Completed')
+    .replace(/return requests/gi, 'replacement requests')
+    .replace(/return request/gi, 'replacement request')
+    .replace(/returns/gi, 'replacements')
+    .replace(/Return Window Closed/g, 'Replacement Window Closed')
+    .replace(/return window/gi, 'replacement window')
+    .replace(/eligible for return/gi, 'eligible for replacement')
+    .replace(/not eligible for return/gi, 'not eligible for replacement')
+    .replace(/create return after/gi, 'create a replacement request after')
+    .replace(/create return/gi, 'create a replacement request')
+    .replace(/return can be requested/gi, 'replacement can be requested')
+    .replace(/return label/gi, 'replacement label')
+    .replace(/Return processing failed/g, 'Replacement processing failed');
 };
 
 export default function ReturnPortal() {
@@ -746,7 +768,9 @@ export default function ReturnPortal() {
     if (deliveryStatus) {
       return {
         eligible: !!deliveryStatus.is_returnable,
-        reason: deliveryStatus.is_returnable ? null : (deliveryStatus.eligibility_reason || deliveryStatus.message || "Not eligible for return")
+        reason: deliveryStatus.is_returnable
+          ? null
+          : toReplacementCopy(deliveryStatus.eligibility_reason || deliveryStatus.message || "Not eligible for replacement")
       };
     }
 
@@ -762,7 +786,7 @@ export default function ReturnPortal() {
     if (!isFulfilled) {
       return {
         eligible: false,
-        reason: "You can create return after product has been delivered"
+        reason: "You can create a replacement request after the product has been delivered"
       };
     }
 
@@ -783,7 +807,7 @@ export default function ReturnPortal() {
     const daysSinceDelivery = Math.floor((today.getTime() - deliveryDate.getTime()) / (1000 * 60 * 60 * 24));
 
     if (daysSinceDelivery > 3) {
-      return { eligible: false, reason: "Return window closed" };
+      return { eligible: false, reason: "Replacement window closed" };
     }
 
     return { eligible: true, reason: null };
@@ -963,20 +987,20 @@ export default function ReturnPortal() {
       cancel.enabled = true;
     }
 
-    // Return action
+    // Replacement action
     let returnAction = { visible: true, enabled: false, reason: '' };
     if (isCancelled) {
       returnAction.visible = false; // hide entirely per business rule
       returnAction.reason = 'Order already cancelled';
     } else if (!isDelivered) {
       returnAction.enabled = false;
-      returnAction.reason = 'Order must be delivered before a return can be requested';
+      returnAction.reason = 'Order must be delivered before a replacement can be requested';
     } else if (hasReachedReturnLimit) {
       returnAction.enabled = false;
-      returnAction.reason = 'You have reached the maximum limit of 2 return requests';
+      returnAction.reason = 'You have reached the maximum limit of 2 replacement requests';
     } else if (!hasReturnableItems) {
       returnAction.enabled = false;
-      returnAction.reason = eligibility.reason || 'No items eligible for return';
+      returnAction.reason = toReplacementCopy(eligibility.reason || 'No items eligible for replacement');
     } else {
       returnAction.enabled = true;
     }
@@ -1009,7 +1033,7 @@ export default function ReturnPortal() {
       setAddressValidationError("");
     } else if (action === 'return') {
       if (returnHistory.length >= 2) {
-        setError("You have reached the maximum limit of 2 return requests. Please contact support@satmi.in for further assistance.");
+        setError("You have reached the maximum limit of 2 replacement requests. Please contact support@satmi.in for further assistance.");
         return;
       }
 
@@ -1022,7 +1046,7 @@ export default function ReturnPortal() {
       });
       
       if (eligibleItems.length === 0) {
-        setError("No items in this order are eligible for return.");
+        setError("No items in this order are eligible for replacement.");
         return;
       }
       
@@ -1141,7 +1165,7 @@ export default function ReturnPortal() {
   const handleGlobalItemSelection = (order, item) => {
     // Check for duplicate return
     if (isItemAlreadyReturned(item)) {
-      setDuplicateReturnWarning("A return request has already been created for this product. Please contact Satmi support at support@satmi.in for further assistance.");
+      setDuplicateReturnWarning("A replacement request has already been created for this product. Please contact Satmi support at support@satmi.in for further assistance.");
       return;
     }
     setDuplicateReturnWarning("");
@@ -1149,7 +1173,7 @@ export default function ReturnPortal() {
     markOrderEligibilityChecked(order);
     const eligibility = checkEligibility(item, order);
     if (!eligibility.eligible) {
-      setError(eligibility.reason || "This item is not eligible for return.");
+      setError(toReplacementCopy(eligibility.reason || "This item is not eligible for replacement."));
       return;
     }
 
@@ -1229,7 +1253,7 @@ export default function ReturnPortal() {
     }) || [];
     
     if (returnableItems.length === 0) {
-      setError("No items in this order are eligible for return. Items may already be returned or the return window has expired.");
+      setError("No items in this order are eligible for replacement. Items may already be processed or the replacement window has expired.");
       return;
     }
     
@@ -1260,13 +1284,13 @@ export default function ReturnPortal() {
 
   // --- BULK SUBMIT ---
   const handleBulkSubmit = async () => {
-    if (selectedItems.length === 0) { setError("Please select at least one item to return."); return; }
+    if (selectedItems.length === 0) { setError("Please select at least one item for replacement."); return; }
     if (!userEmail) { setError("Please enter your email address."); return; }
     if (!videoFile) { setError("Please upload a video of the product(s) before submitting."); return; }
 
-    // Limit: max 2 return requests per person (includes rejected requests)
+    // Limit: max 2 replacement requests per person (includes rejected requests)
     if (returnHistory.length >= 2) {
-      setError("You have reached the maximum limit of 2 return requests. Please contact support@satmi.in for further assistance.");
+      setError("You have reached the maximum limit of 2 replacement requests. Please contact support@satmi.in for further assistance.");
       return;
     }
 
@@ -1306,7 +1330,7 @@ export default function ReturnPortal() {
         price: parseFloat(item.price) || 0,
       }));
 
-      // 3. Submit return request with video URL
+      // 3. Submit replacement request with video URL
       const response = await fetch('/api/submit-return', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1329,19 +1353,19 @@ export default function ReturnPortal() {
         // Map error codes to user-friendly messages
         const errorMessages = {
           'VALIDATION_ERROR': 'Invalid request format. Please check your input.',
-          'DUPLICATE_RETURN': 'Some items have already been returned. Please select different items.',
-          'RETURN_LIMIT_REACHED': 'You have reached the maximum limit of 2 return requests. Please contact support@satmi.in for further assistance.',
+          'DUPLICATE_RETURN': 'Some items already have a replacement request. Please select different items.',
+          'RETURN_LIMIT_REACHED': 'You have reached the maximum limit of 2 replacement requests. Please contact support@satmi.in for further assistance.',
           'MISSING_LINE_ITEM_IDS': 'Invalid item selection. Please try again.',
-          'FIRESTORE_ERROR': 'Failed to save return request. Please try again.',
+          'FIRESTORE_ERROR': 'Failed to save replacement request. Please try again.',
           'INTERNAL_ERROR': 'Server error. Please try again later.'
         };
         
-        const userMessage = errorMessages[result.code] || result.error || result.details || 'Return processing failed';
-        setError(userMessage);
+        const userMessage = errorMessages[result.code] || result.error || result.details || 'Replacement processing failed';
+        setError(toReplacementCopy(userMessage));
         return;
       }
       
-      setSuccessMessage(result.message || "Return Request Submitted Successfully! We will review and email you shortly.");
+      setSuccessMessage(toReplacementCopy(result.message || "Replacement Request Submitted Successfully! We will review and email you shortly."));
       
       // Reset Form
       setSelectedItems([]);
@@ -1768,7 +1792,7 @@ export default function ReturnPortal() {
                     : "border-transparent text-gray-400 hover:text-gray-600 font-medium"
                 }`}
               >
-                Returns
+                Replacements
               </button>
             </div>
 
@@ -1930,7 +1954,7 @@ export default function ReturnPortal() {
                                           </div>
                                         )}
                                       </div>
-                                      {/* Return Order — hidden entirely when cancelled */}
+                                      {/* Replacement action — hidden entirely when cancelled */}
                                       {actions.return.visible && (
                                         <div className="relative group">
                                           <button
@@ -1944,7 +1968,7 @@ export default function ReturnPortal() {
                                             <svg className={`w-4 h-4 ${actions.return.enabled ? 'text-gray-400' : 'text-gray-200'}`} fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
                                               <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
                                             </svg>
-                                            <span>Return Order</span>
+                                            <span>Request Replacement</span>
                                           </button>
                                           {!actions.return.enabled && (
                                             <div className="hidden group-hover:block absolute right-full top-1/2 -translate-y-1/2 mr-2 px-3 py-2 bg-[#FDF6EF] text-[#96572A] text-[11px] rounded-lg w-52 z-30 shadow-lg border border-[#E8D5C0]">
@@ -2028,9 +2052,9 @@ export default function ReturnPortal() {
                                             ? "bg-blue-50 text-blue-600 border border-blue-200"
                                             : "bg-gray-50 text-gray-400 border border-gray-200"
                                     }`}>
-                                      {itemReturnStatus === 'RETURNED' ? "Returned" :
-                                       itemReturnStatus === 'RETURN_APPROVED' ? "Return Approved" :
-                                       itemReturnStatus === 'RETURN_REQUESTED' ? "Return Requested" :
+                                      {itemReturnStatus === 'RETURNED' ? "Replacement Completed" :
+                                       itemReturnStatus === 'RETURN_APPROVED' ? "Replacement Approved" :
+                                       itemReturnStatus === 'RETURN_REQUESTED' ? "Replacement Requested" :
                                        baseOrderStatus}
                                     </span>
                                   </div>
@@ -2117,9 +2141,9 @@ export default function ReturnPortal() {
                                               ? "bg-blue-50 text-blue-600 border border-blue-200"
                                               : "bg-gray-50 text-gray-400 border border-gray-200"
                                       }`}>
-                                        {itemReturnStatus === 'RETURNED' ? "Returned" :
-                                         itemReturnStatus === 'RETURN_APPROVED' ? "Return Approved" :
-                                         itemReturnStatus === 'RETURN_REQUESTED' ? "Return Requested" :
+                                        {itemReturnStatus === 'RETURNED' ? "Replacement Completed" :
+                                         itemReturnStatus === 'RETURN_APPROVED' ? "Replacement Approved" :
+                                         itemReturnStatus === 'RETURN_REQUESTED' ? "Replacement Requested" :
                                          baseOrderStatus}
                                       </span>
                                     </td>
@@ -2185,7 +2209,7 @@ export default function ReturnPortal() {
                                                     </div>
                                                   )}
                                                 </div>
-                                                {/* Return Order — hidden entirely when cancelled */}
+                                                {/* Replacement action — hidden entirely when cancelled */}
                                                 {actions.return.visible && (
                                                   <div className="relative group">
                                                     <button
@@ -2199,7 +2223,7 @@ export default function ReturnPortal() {
                                                       <svg className={`w-4 h-4 ${actions.return.enabled ? 'text-gray-400' : 'text-gray-200'}`} fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
                                                       </svg>
-                                                      <span>Return Order</span>
+                                                      <span>Request Replacement</span>
                                                     </button>
                                                     {!actions.return.enabled && (
                                                       <div className="hidden group-hover:block absolute right-full top-1/2 -translate-y-1/2 mr-2 px-3 py-2 bg-[#FDF6EF] text-[#96572A] text-[11px] rounded-lg w-52 z-30 shadow-lg border border-[#E8D5C0]">
@@ -2238,13 +2262,13 @@ export default function ReturnPortal() {
             </>
           )}
 
-          {/* Returns View */}
+          {/* Replacements View */}
           {dashboardView === "my-returns" && (
             <div className="space-y-4">
               {loadingReturns ? (
                 <div className="text-center py-16">
                   <div className="animate-spin rounded-full h-7 w-7 border-2 border-[#96572A] border-t-transparent mx-auto"></div>
-                  <p className="text-gray-400 mt-3 text-sm">Loading returns...</p>
+                  <p className="text-gray-400 mt-3 text-sm">Loading replacements...</p>
                 </div>
               ) : returnHistory.length > 0 ? (
                 returnHistory.map((returnRequest, index) => (
@@ -2286,7 +2310,7 @@ export default function ReturnPortal() {
                     {getNormalizedReturnWorkflowStatus(returnRequest) === 'RETURN_APPROVED' && (
                       <div className="mt-3 p-3 bg-emerald-50 rounded-lg border border-emerald-100">
                         <p className="text-xs text-emerald-700">
-                          Return approved and the return label will be mailed to your registered mail id.
+                          Replacement approved and the replacement label will be mailed to your registered email address.
                         </p>
                       </div>
                     )}
@@ -2299,8 +2323,8 @@ export default function ReturnPortal() {
                   <svg className="w-12 h-12 text-gray-200 mx-auto mb-4" fill="none" stroke="currentColor" strokeWidth={1} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
                   </svg>
-                  <p className="text-gray-400 text-sm">No return requests yet</p>
-                  <p className="text-gray-300 text-xs mt-1">Your returns will appear here</p>
+                  <p className="text-gray-400 text-sm">No replacement requests yet</p>
+                  <p className="text-gray-300 text-xs mt-1">Your replacements will appear here</p>
                 </div>
               )}
             </div>
@@ -2327,12 +2351,12 @@ export default function ReturnPortal() {
           </div>
         )}
 
-        {/* Return Modal */}
+        {/* Replacement Modal */}
         {isModalOpen && selectedItems.length > 0 && (
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-5">
-                <h3 className="text-lg font-semibold text-gray-900">Return Request</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Replacement Request</h3>
                 <button 
                   onClick={() => setIsModalOpen(false)} 
                   className="p-1 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
@@ -2365,7 +2389,7 @@ export default function ReturnPortal() {
                 ))}
               </div>
 
-              {/* Return Form */}
+              {/* Replacement Form */}
               <div className="space-y-4 mt-5 pt-5 border-t border-gray-100">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Reason</label>
@@ -2444,7 +2468,7 @@ export default function ReturnPortal() {
                       Submitting...
                     </>
                   ) : (
-                    "Submit Return"
+                    "Submit Replacement"
                   )}
                 </button>
               </div>

@@ -215,10 +215,10 @@ export default function AdminDashboard() {
       setApproveModal({ open: false, request: null });
       if (data.labelUrl) window.open(data.labelUrl, "_blank");
       if (data.emailSent) {
-        alert(`Return created. Label ${data.labelUrl ? "opened and " : ""}approval email sent to ${request.email}.`);
+        alert(`Replacement created. Label ${data.labelUrl ? "opened and " : ""}approval email sent to ${request.email}.`);
       } else {
         const emailReason = data.emailError || 'Unknown error';
-        alert(`Return created. Label ${data.labelUrl ? "opened. " : ""}⚠️ Approval email FAILED for ${request.email}.\n\nReason: ${emailReason}\n\nPlease forward the return label manually.`);
+        alert(`Replacement created. Label ${data.labelUrl ? "opened. " : ""}⚠️ Approval email FAILED for ${request.email}.\n\nReason: ${emailReason}\n\nPlease forward the replacement label manually.`);
       }
     } catch (error) {
       console.error("Approve error:", error);
@@ -252,7 +252,7 @@ export default function AdminDashboard() {
   const handleGenerateLabel = async (request) => {
     const sid = request.shiprocketShipmentId;
     if (!sid) {
-      alert("No shipment ID. Approve the return first.");
+      alert("No shipment ID. Approve the replacement first.");
       return;
     }
     setLabelLoadingId(request.id);
@@ -303,11 +303,11 @@ export default function AdminDashboard() {
 
   const handleBulkApprove = async () => {
     if (selectedReturns.size === 0) {
-      alert("Please select returns to approve");
+      alert("Please select replacements to approve");
       return;
     }
     
-    if (!confirm(`Approve ${selectedReturns.size} return requests?`)) return;
+    if (!confirm(`Approve ${selectedReturns.size} replacement requests?`)) return;
     
     setProcessingId('bulk');
     try {
@@ -331,13 +331,13 @@ export default function AdminDashboard() {
         
         const data = await parseApiResponse(res);
         if (!res.ok || !data.success) {
-          throw new Error(data.error || `Approval failed for return ${returnId}`);
+          throw new Error(data.error || `Approval failed for replacement ${returnId}`);
         }
       });
       
       await Promise.all(promises);
       setSelectedReturns(new Set());
-      alert(`Successfully approved ${selectedReturns.size} returns!`);
+      alert(`Successfully approved ${selectedReturns.size} replacements!`);
     } catch (error) {
       console.error("Bulk approve error:", error);
       alert("Error: " + error.message);
@@ -348,11 +348,11 @@ export default function AdminDashboard() {
 
   const handleBulkReject = async () => {
     if (selectedReturns.size === 0) {
-      alert("Please select returns to reject");
+      alert("Please select replacements to reject");
       return;
     }
     
-    const reason = prompt("Rejection reason for all selected returns:");
+    const reason = prompt("Rejection reason for all selected replacements:");
     if (!reason) return;
     
     setProcessingId('bulk');
@@ -370,7 +370,7 @@ export default function AdminDashboard() {
       
       await Promise.all(promises);
       setSelectedReturns(new Set());
-      alert(`Successfully rejected ${selectedReturns.size} returns!`);
+      alert(`Successfully rejected ${selectedReturns.size} replacements!`);
     } catch (error) {
       console.error("Bulk reject error:", error);
       alert("Error: " + error.message);
@@ -399,7 +399,7 @@ export default function AdminDashboard() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `returns-export-${new Date().toISOString().split('T')[0]}.csv`;
+      a.download = `replacements-export-${new Date().toISOString().split('T')[0]}.csv`;
       a.click();
       window.URL.revokeObjectURL(url);
     } catch (error) {
@@ -436,7 +436,7 @@ export default function AdminDashboard() {
             <div className="flex items-center gap-5">
               <div className="flex items-center gap-3">
                 <img src="/logo.png" alt="Satmi" className="h-8 w-auto object-contain" />
-                <h1 className="text-sm font-semibold text-gray-800 tracking-wide">Returns Dashboard</h1>
+                <h1 className="text-sm font-semibold text-gray-800 tracking-wide">Replacements Dashboard</h1>
               </div>
               <div className="flex items-center bg-gray-50 rounded-full p-0.5 border border-gray-100">
                 <button
@@ -582,7 +582,7 @@ export default function AdminDashboard() {
           <div className="bg-white rounded-xl border border-gray-100 p-4">
             <p className="text-[11px] text-black uppercase tracking-wider font-medium">This Month</p>
             <p className="text-2xl font-bold text-[#96572A] mt-1">{stats.thisMonth}</p>
-            <p className="text-[10px] text-black mt-0.5">New returns</p>
+            <p className="text-[10px] text-black mt-0.5">New replacements</p>
           </div>
         </div>
         
@@ -596,15 +596,15 @@ export default function AdminDashboard() {
           <div className="bg-white rounded-xl border border-gray-100 p-4">
             <p className="text-[11px] text-black uppercase tracking-wider font-medium">Average Refund</p>
             <p className="text-2xl font-bold text-indigo-600 mt-1">₹{stats.avgRefundAmount.toFixed(2)}</p>
-            <p className="text-[10px] text-black mt-0.5">Per return</p>
+            <p className="text-[10px] text-black mt-0.5">Per replacement</p>
           </div>
         </div>
         
         {/* Analytics Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
-          {/* Top Return Reasons */}
+          {/* Top Replacement Reasons */}
           <div className="bg-white rounded-xl border border-gray-100 p-5">
-            <h3 className="text-sm font-semibold text-gray-800 mb-4">Top Return Reasons</h3>
+            <h3 className="text-sm font-semibold text-gray-800 mb-4">Top Replacement Reasons</h3>
             <div className="space-y-2.5">
               {topReturnReasons.length > 0 ? (
                 topReturnReasons.map(([reason, count], index) => (
@@ -670,7 +670,7 @@ export default function AdminDashboard() {
             <svg className="w-10 h-10 text-gray-200 mx-auto mb-3" fill="none" stroke="currentColor" strokeWidth={1} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
             </svg>
-            <p className="text-black text-sm">No return requests {statusFilter !== "All" ? `with status "${statusFilter}"` : ""}</p>
+            <p className="text-black text-sm">No replacement requests {statusFilter !== "All" ? `with status "${statusFilter}"` : ""}</p>
           </div>
         ) : (
           <>
@@ -733,9 +733,9 @@ export default function AdminDashboard() {
                       
                       {/* Card Body */}
                       <div className="px-4 py-3.5 space-y-3">
-                        {/* Return Details */}
+                        {/* Replacement Details */}
                         <div>
-                          <h4 className="text-[10px] text-black uppercase tracking-wider font-medium mb-1.5">Return Details</h4>
+                          <h4 className="text-[10px] text-black uppercase tracking-wider font-medium mb-1.5">Replacement Details</h4>
                           <div className="space-y-1 text-xs">
                             <div className="text-gray-600">{req.reason}</div>
                             {req.comments && (
@@ -1034,10 +1034,10 @@ export default function AdminDashboard() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                 </svg>
               </div>
-              <h2 className="text-base font-semibold text-gray-900">Approve Return</h2>
+              <h2 className="text-base font-semibold text-gray-900">Approve Replacement</h2>
             </div>
             <p className="text-xs text-black mb-5">
-              This will create a return, generate a label, and email the customer for order <strong className="text-gray-700">{approveModal.request.orderId}</strong>.
+              This will create a replacement, generate a label, and email the customer for order <strong className="text-gray-700">{approveModal.request.orderId}</strong>.
             </p>
             <div className="flex gap-3 justify-end">
               <button
@@ -1051,7 +1051,7 @@ export default function AdminDashboard() {
                 disabled={processingId === approveModal.request.id}
                 className="px-5 py-2 bg-emerald-600 text-white rounded-full hover:bg-emerald-700 disabled:opacity-60 text-sm font-medium transition-colors"
               >
-                {processingId === approveModal.request.id ? "Processing…" : "Approve & Create Return"}
+                {processingId === approveModal.request.id ? "Processing…" : "Approve & Create Replacement"}
               </button>
             </div>
           </div>
@@ -1068,10 +1068,10 @@ export default function AdminDashboard() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </div>
-              <h2 className="text-base font-semibold text-gray-900">Reject Return</h2>
+              <h2 className="text-base font-semibold text-gray-900">Reject Replacement</h2>
             </div>
             <p className="text-xs text-black mb-4">
-              Reject return for order <strong className="text-gray-700">{rejectModal.request.orderId}</strong>.
+              Reject replacement for order <strong className="text-gray-700">{rejectModal.request.orderId}</strong>.
             </p>
             <div className="mb-5">
               <label className="block text-xs font-medium text-black uppercase tracking-wider mb-1.5">Reason (optional)</label>
@@ -1079,7 +1079,7 @@ export default function AdminDashboard() {
                 value={rejectModal.reason}
                 onChange={(e) => setRejectModal((m) => ({ ...m, reason: e.target.value }))}
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-gray-900 text-sm min-h-20 focus:outline-none focus:ring-2 focus:ring-[#96572A]/20 focus:border-[#96572A] transition-colors"
-                placeholder="e.g. Outside return window"
+                placeholder="e.g. Outside replacement window"
               />
             </div>
             <div className="flex gap-3 justify-end">
@@ -1114,7 +1114,7 @@ export default function AdminDashboard() {
               <h2 className="text-base font-semibold text-gray-900">Edit Warehouse Address</h2>
             </div>
             <p className="text-xs text-black mb-5">
-              Update warehouse address for order <strong className="text-gray-700">{warehouseModal.request.orderId}</strong>. Used when creating the return shipment.
+              Update warehouse address for order <strong className="text-gray-700">{warehouseModal.request.orderId}</strong>. Used when creating the replacement shipment.
             </p>
             <div className="space-y-3.5">
               <div>
