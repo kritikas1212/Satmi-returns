@@ -210,6 +210,22 @@ export default function ReturnPortal() {
     }
   }, []);
 
+  // Parse URL parameters for auto-fill on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const phoneParam = params.get("phone");
+      const emailParam = params.get("email");
+
+      if (phoneParam) {
+        setPhoneNumber(phoneParam);
+      }
+      if (emailParam) {
+        setUserEmail(emailParam);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (!openKebabMenu) return;
 
